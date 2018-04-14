@@ -1,10 +1,12 @@
 Deconvolution of Raman spectra
 
-Initially written to deconvolute spectra of soot
+Initially written to deconvolute soot spectra
 
 Usage:
 
-        ./Deconvolution.py <FileName>
+        $./Deconvolution.py <FileName>
 
-Or
-	python Deconvolution.py <FileName>
+Or:
+
+	$python Deconvolution.py <FileName>
+
