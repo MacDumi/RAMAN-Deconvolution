@@ -14,6 +14,7 @@ degree = 1 #polynomial degree for the baseline
 
 #initial position (PAH, D4, D1, D3, G, D2)
 freq = [1280, 1168, 1353, 1517, 1585, 1611] 
+names = ['PAH', 'D4', 'D1', 'D3', 'G', 'D2']
 
 #shape of the peaks (PAH, D4, D1, D3, G, D2)
 shape = ['L', 'L', 'L', 'G', 'L', 'L'] 
@@ -21,7 +22,7 @@ shape = ['L', 'L', 'L', 'G', 'L', 'L']
 #bounds
 lower = [0, 0, 1230, 0, 0, 1127, 0, 0, 1343, 0, 0, 1489, 0, 0, 1571, 0, 0, 1599]
 upper = [np.inf, np.inf, 1300, np.inf, np.inf, 1208, np.inf, np.inf, 1358, np.inf, 
-	    np.inf, 1545, np.inf, np.inf, 1598, np.inf, np.inf, 1624]
+		np.inf, 1545, np.inf, np.inf, 1598, np.inf, np.inf, 1624]
 #data limits
 limit = [820, 2000]
 
@@ -65,6 +66,15 @@ def plot_peaks(t, *pars):
 	plt.plot(t, Peak(t, [pars[9], pars[10], pars[11], shape[3]]), label ='D3')
 	plt.plot(t, Peak(t, [pars[12], pars[13], pars[14], shape[4]]), label ='G')
 	plt.plot(t, Peak(t, [pars[15], pars[16], pars[17], shape[5]]), label ='D2')
+
+def print_result(t, *pars):
+	print("****************FIT RESULTS****************")
+	for i in np.arange(0, len(names)):
+		print("Peak %s:\n	Centre: %.4f cm-1\n	Amplitude: %.4f\n	gamma: %.4f"
+			%(names[i], pars[3*i+2], pars[3*i], pars[3*i+1]))
+		area = np.trapz(Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], shape[i]]), x = t)
+		print("	Area = %f" %area)
+	
 	
 
 data = np.loadtxt(path, skiprows = 2) #load data
@@ -76,21 +86,21 @@ baseline = peakutils.baseline(data[low:high,1], degree) #baseline
 intensity = data[low:high,1] - baseline
 
 #plot the baseline
-'''
+
 fig = plt.figure(figsize=(12,8))
 ax = fig.add_subplot(111)
-ax.plot(data[:,0], data[:,1], label = 'Experimental data')
-ax.plot(data[:,0], baseline, 'r--', label = 'Baseline')
-'''
+ax.plot(x, data[low:high,1], label = 'Experimental data')
+ax.plot(x, baseline, 'r--', label = 'Baseline')
+plt.show()
 
 #initial guess
-parguess = (1000, 85, freq[0], 1000, 228, freq[1], 1000, 192, freq[2], 
-	    1000, 158, freq[3], 1000, 74, freq[4], 1000, 52, freq[5])
+parguess = (10000, 85, freq[0], 10000, 228, freq[1], 10000, 192, freq[2], 
+		10000, 158, freq[3], 10000, 74, freq[4], 10000, 52, freq[5])
 #fit the data
 popt, pcov = curve_fit(six_peaks, x, intensity, parguess, bounds = [lower, upper])
-print (popt) #fit result
+#fit result
+print_result(x, *popt)
 #plot everything
-
 fig_res = plt.figure(figsize=(12,8))
 ax_r = fig_res.add_subplot(111)
 ax_r.plot(x, intensity,label='Experimental data')
