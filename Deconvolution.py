@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import peakutils
 import argparse as ap
-import sys
+import glob
 from scipy.optimize import curve_fit
 from scipy import asarray as ar,exp
 
@@ -25,7 +25,7 @@ lower = [0, 0, 1230, 0, 0, 1127, 0, 0, 1343, 0, 0, 1489, 0, 0, 1571, 0, 0, 1599]
 upper = [np.inf, np.inf, 1300, np.inf, np.inf, 1208, np.inf, np.inf, 1358, np.inf, 
 		np.inf, 1545, np.inf, np.inf, 1598, np.inf, np.inf, 1624]
 #data limits
-limit = [820, 2000]
+limit = [800, 2100]
 
 ####################################
 
@@ -67,48 +67,41 @@ def plot_peaks(t, *pars):
 	plt.plot(t, Peak(t, [pars[12], pars[13], pars[14], shape[4]]), label ='G')
 	plt.plot(t, Peak(t, [pars[15], pars[16], pars[17], shape[5]]), label ='D2')
 
-def print_result(t, save, *pars):
+def print_result(t, item, save, verbose, *pars):
 	text = "****************FIT RESULTS****************\n"
 	for i in np.arange(0, len(names)):
 		text = text +"Peak %s:\n	Centre: %.4f cm-1\n	Amplitude: %.4f\n	gamma: %.4f\n" %(names[i], pars[3*i+2], pars[3*i], pars[3*i+1])
 		area = np.trapz(Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], shape[i]]), x = t)
 		text = text +"	Area = %f\n" %area
-	print(text)
+	if verbose:
+		print(text)
 	if save:
-		output = open(args.name[:-4]+"_fit_result.txt", "w")
+		output = open(item[:-4]+"_fit_result.txt", "w")
 		output.writelines(text)
 		output.close()
 	
-	
-if __name__ == '__main__':
-	parser = ap.ArgumentParser(description='Deconvolution of Raman spectra')
-	parser.add_argument('-s','--save', action='store_true', help='Saves the result of the fit (image and report sheet)')
-	parser.add_argument('name', help='File name')
-	args = parser.parse_args()
-
-	data = np.loadtxt(args.name, skiprows = 2) #load data
+def deconvolute(item, save, verbose, bs_line):
+	data = np.loadtxt(item, skiprows = 2) #load data
 	low = np.argwhere(data[:,0]>limit[0])[0,0]
 	high = np.argwhere(data[:,0]>limit[1])[0,0]
 	x = data[low:high, 0]
+	
 	#baseline
 	baseline = peakutils.baseline(data[low:high,1], degree) #baseline
 	intensity = data[low:high,1] - baseline
-
-	#plot the baseline
-	matplotlib.rcParams.update({'font.size': 14})
-	fig = plt.figure(figsize=(12,8))
-	ax = fig.add_subplot(111)
-	ax.plot(x, data[low:high,1], label = 'Experimental data')
-	ax.plot(x, baseline, 'r--', label = 'Baseline')
-	plt.show()
-
+	if bs_line:
+		fig = plt.figure(figsize=(12,8))
+		ax = fig.add_subplot(111)
+		ax.plot(x, data[low:high,1], label = 'Experimental data')
+		ax.plot(x, baseline, 'r--', label = 'Baseline')
+		plt.show()
 	#initial guess
-	parguess = (10000, 85, freq[0], 10000, 228, freq[1], 10000, 192, freq[2], 
-			10000, 158, freq[3], 10000, 74, freq[4], 10000, 52, freq[5])
+	parguess = (10000, 60, freq[0], 10000, 50, freq[1], 10000, 60, freq[2], 
+			10000, 70, freq[3], 10000, 30, freq[4], 10000, 25, freq[5])
 	#fit the data
 	popt, pcov = curve_fit(six_peaks, x, intensity, parguess, bounds = [lower, upper])
 	#fit result
-	print_result(x, args.save, *popt)
+	print_result(x, item, save, verbose, *popt)
 	#plot everything
 	fig_res = plt.figure(figsize=(12,8))
 	ax_r = fig_res.add_subplot(111)
@@ -119,10 +112,24 @@ if __name__ == '__main__':
 	plt.ylabel("Intensity")
 	plt.xlabel("cm-1")
 	plt.legend()
-	if(args.save):
-		plt.savefig(args.name[:-3]+'png')
-
-	plt.show()
+	if(save):
+		plt.savefig(item[:-3]+'png')
+	
+if __name__ == '__main__':
+	parser = ap.ArgumentParser(description='Deconvolution of Raman spectra')
+	parser.add_argument('-s','--save', action='store_true', help='Saves the result of the fit (image and report sheet)')
+	parser.add_argument('-p','--path', action='store_true', help='processes all the files in the directory')
+	parser.add_argument('name', help='File name')
+	args = parser.parse_args()
+	matplotlib.rcParams.update({'font.size': 14})
+	if (args.path):
+		files = glob.glob(args.name+"*.txt")
+		for item in files:
+			print(item+" proccessed")
+			deconvolute(item, args.save, False, False)
+	else:
+		deconvolute(args.name, args.save, True, True)
+		plt.show()
 
 
 
