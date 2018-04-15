@@ -4,7 +4,8 @@ import math as mt
 import matplotlib.pyplot as plt
 import matplotlib
 import peakutils
-from sys import argv
+import argparse as ap
+import sys
 from scipy.optimize import curve_fit
 from scipy import asarray as ar,exp
 
@@ -31,10 +32,9 @@ limit = [820, 2000]
 font = {'family': 'serif',
 		'color':  'darkred',
 		'weight': 'normal',
-		'size': 16,
+		'size': 14,
 		}
 
-path =argv[1]
 
 def Peak(x, pars):
 	I = pars[0]  # peak height
@@ -67,51 +67,62 @@ def plot_peaks(t, *pars):
 	plt.plot(t, Peak(t, [pars[12], pars[13], pars[14], shape[4]]), label ='G')
 	plt.plot(t, Peak(t, [pars[15], pars[16], pars[17], shape[5]]), label ='D2')
 
-def print_result(t, *pars):
-	print("****************FIT RESULTS****************")
+def print_result(t, save, *pars):
+	text = "****************FIT RESULTS****************\n"
 	for i in np.arange(0, len(names)):
-		print("Peak %s:\n	Centre: %.4f cm-1\n	Amplitude: %.4f\n	gamma: %.4f"
-			%(names[i], pars[3*i+2], pars[3*i], pars[3*i+1]))
+		text = text +"Peak %s:\n	Centre: %.4f cm-1\n	Amplitude: %.4f\n	gamma: %.4f\n" %(names[i], pars[3*i+2], pars[3*i], pars[3*i+1])
 		area = np.trapz(Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], shape[i]]), x = t)
-		print("	Area = %f" %area)
+		text = text +"	Area = %f\n" %area
+	print(text)
+	if save:
+		output = open(args.name[:-4]+"_fit_result.txt", "w")
+		output.writelines(text)
+		output.close()
 	
 	
+if __name__ == '__main__':
+	parser = ap.ArgumentParser(description='Deconvolution of Raman spectra')
+	parser.add_argument('-s','--save', action='store_true', help='Saves the result of the fit (image and report sheet)')
+	parser.add_argument('name', help='File name')
+	args = parser.parse_args()
 
-data = np.loadtxt(path, skiprows = 2) #load data
-low = np.argwhere(data[:,0]>limit[0])[0,0]
-high = np.argwhere(data[:,0]>limit[1])[0,0]
-x = data[low:high, 0]
-#baseline
-baseline = peakutils.baseline(data[low:high,1], degree) #baseline
-intensity = data[low:high,1] - baseline
+	data = np.loadtxt(args.name, skiprows = 2) #load data
+	low = np.argwhere(data[:,0]>limit[0])[0,0]
+	high = np.argwhere(data[:,0]>limit[1])[0,0]
+	x = data[low:high, 0]
+	#baseline
+	baseline = peakutils.baseline(data[low:high,1], degree) #baseline
+	intensity = data[low:high,1] - baseline
 
-#plot the baseline
+	#plot the baseline
+	matplotlib.rcParams.update({'font.size': 14})
+	fig = plt.figure(figsize=(12,8))
+	ax = fig.add_subplot(111)
+	ax.plot(x, data[low:high,1], label = 'Experimental data')
+	ax.plot(x, baseline, 'r--', label = 'Baseline')
+	plt.show()
 
-fig = plt.figure(figsize=(12,8))
-ax = fig.add_subplot(111)
-ax.plot(x, data[low:high,1], label = 'Experimental data')
-ax.plot(x, baseline, 'r--', label = 'Baseline')
-plt.show()
+	#initial guess
+	parguess = (10000, 85, freq[0], 10000, 228, freq[1], 10000, 192, freq[2], 
+			10000, 158, freq[3], 10000, 74, freq[4], 10000, 52, freq[5])
+	#fit the data
+	popt, pcov = curve_fit(six_peaks, x, intensity, parguess, bounds = [lower, upper])
+	#fit result
+	print_result(x, args.save, *popt)
+	#plot everything
+	fig_res = plt.figure(figsize=(12,8))
+	ax_r = fig_res.add_subplot(111)
+	ax_r.plot(x, intensity,label='Experimental data')
 
-#initial guess
-parguess = (10000, 85, freq[0], 10000, 228, freq[1], 10000, 192, freq[2], 
-		10000, 158, freq[3], 10000, 74, freq[4], 10000, 52, freq[5])
-#fit the data
-popt, pcov = curve_fit(six_peaks, x, intensity, parguess, bounds = [lower, upper])
-#fit result
-print_result(x, *popt)
-#plot everything
-fig_res = plt.figure(figsize=(12,8))
-ax_r = fig_res.add_subplot(111)
-ax_r.plot(x, intensity,label='Experimental data')
+	plt.plot(x, six_peaks(x, *popt), 'r--', label='Cumulative')
+	plot_peaks(x, *popt);
+	plt.ylabel("Intensity")
+	plt.xlabel("cm-1")
+	plt.legend()
+	if(args.save):
+		plt.savefig(args.name[:-3]+'png')
 
-plt.plot(x, six_peaks(x, *popt), 'r--', label='Cumulative')
-plot_peaks(x, *popt);
-plt.ylabel("Intensity")
-plt.xlabel("cm-1")
-plt.legend()
+	plt.show()
 
-
-plt.show()
 
 

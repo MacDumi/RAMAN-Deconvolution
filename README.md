@@ -4,9 +4,12 @@ Initially written to deconvolute soot spectra
 
 Usage:
 
-        $./Deconvolution.py <FileName>
+        $./Deconvolution.py <FileName> #Displays the result without saving it
+	$./Deconvolution.py --save <FileName> #Displays and saves the result
+        $./Deconvolution.py -s <FileName> #Displays and saves the result     
 
-Or:
+Help:
 
-	$python Deconvolution.py <FileName>
+	$./Deconvolution.py --help
+	$./Deconvolution.py -h  
 
