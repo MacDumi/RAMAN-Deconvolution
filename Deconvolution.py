@@ -94,7 +94,6 @@ def print_result(t, item, save, verbose, *pars):
 	
 def detect_spikes(y):
 	#detect spikes
-	print(thrsh)
 	spikes=[]
 	for i in np.arange(0, len(y)-2):
 		previous = np.mean([y[i], y[i+1]])
@@ -221,7 +220,7 @@ if __name__ == '__main__':
 			print(item+" proccessed")
 			deconvolute(item, args.save, False, False)
 	else:
-		deconvolute(args.name, args.save, False, False)
+		deconvolute(args.name, args.save, True, True)
 		plt.show()
 
 
