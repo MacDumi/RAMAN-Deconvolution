@@ -6,6 +6,7 @@ import matplotlib
 import peakutils
 import argparse as ap
 import glob
+import os
 from scipy.optimize import curve_fit
 from scipy import asarray as ar,exp
 
@@ -70,7 +71,7 @@ def plot_peaks(t, *pars):
 	global six
 	plt.plot(t, Peak(t, [pars[0], pars[1], pars[2], shape[0]]), label ='D2')
 	plt.plot(t, Peak(t, [pars[3], pars[4], pars[5], shape[1]]), label ='D4')
-	plt.plot(t, Peak(t, [pars[6], pars[7], pars[8], shape[3]]), label ='D1')
+	plt.plot(t, Peak(t, [pars[6], pars[7], pars[8], shape[2]]), label ='D1')
 	plt.plot(t, Peak(t, [pars[9], pars[10], pars[11], shape[3]]), label ='D3')
 	plt.plot(t, Peak(t, [pars[12], pars[13], pars[14], shape[4]]), label ='G')
 	if six:
@@ -105,6 +106,7 @@ def detect_spikes(y):
 	return [int(spk) for spk in spikes]
 	
 def plot_baseline(x, y,baseline, spikes):
+	plt.close()
 	fig = plt.figure(figsize=(12,8))
 	ax = fig.add_subplot(111)
 	ax.plot(x, y, label = 'Experimental data')
@@ -114,7 +116,7 @@ def plot_baseline(x, y,baseline, spikes):
 	plt.xlabel("cm-1")
 	plt.legend()
 	plt.grid()
-	plt.show()
+	plt.show(block=False)
 		
 def deconvolute(item, save, verbose, bs_line):
 	global six, thrsh
@@ -185,8 +187,8 @@ def deconvolute(item, save, verbose, bs_line):
 	sigma =np.ones(len(x))*1.2
 	sigma[np.abs(x-1450)<50]=0.8	
 	#initial guess
-	parguess = (10000, 60, freq[0], 10000, 50, freq[1], 10000, 60, freq[2], 
-			10000, 70, freq[3], 10000, 30, freq[4], 10000, 25, freq[5])
+	parguess = (5000, 25, freq[0], 1000, 50, freq[1], 5000, 60, freq[2], 
+			2000, 70, freq[3], 10000, 30, freq[4], 10000, 25, freq[5])
 	#fit the data
 	popt, pcov = curve_fit(six_peaks, x, intensity, parguess,sigma=sigma, bounds = [lower, upper])
 	#fit result
@@ -207,6 +209,7 @@ def deconvolute(item, save, verbose, bs_line):
 	
 	
 	
+	
 if __name__ == '__main__':
 	parser = ap.ArgumentParser(description='Deconvolution of Raman spectra')
 	parser.add_argument('-s','--save', action='store_true', help='Saves the result of the fit (image and report sheet)')
@@ -222,6 +225,7 @@ if __name__ == '__main__':
 	else:
 		deconvolute(args.name, args.save, True, True)
 		plt.show()
+	os._exit(0)
 
 
 
