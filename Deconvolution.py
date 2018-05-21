@@ -145,8 +145,7 @@ def deconvolute(item, save, verbose, bs_line):
 	if bs_line:
 		plot_baseline(x, y, baseline, spikes)
 	while bs_flag and verbose:
-		other_deg = input("Current polynomial degree for the baseline: %d\nDo you want to try with a different one? [N/y]" %degree)
-		print(other_deg)
+		other_deg = input("Baseline polynomial degree is set to: %d\nDo you want to change it? [N/y]" %degree)
 		if other_deg in ['Y', 'y']:
 			try:
 				deg = int(input("New degree: "))
@@ -164,13 +163,13 @@ def deconvolute(item, save, verbose, bs_line):
 		while not menu_flag:
 			if verbose:
 				if spikes:
-					spk = input("Remove the spikes? Y/n: ")
+					spk = input("Remove the spikes? [Y/n] ")
 				else:
 					spk ='n'
 			else:
 				spk='y'
 			if spk in answ:
-				try_again = input("Would you like to try again with a different threshold value? Y/n: ")
+				try_again = input("Would you like to try again with a different threshold value? [Y/n] ")
 				if try_again in answ:
 					menu_flag=True
 				else:
@@ -193,7 +192,7 @@ def deconvolute(item, save, verbose, bs_line):
 	#get the number of peaks to fit with
 	print("\n*********Deconvolution***********")
 	if verbose:
-		pah = input("Take into account the PAH band? Y/n: ")
+		pah = input("Take into account the PAH band? [Y/n] ")
 	else:
 		pah='y'
 	if pah =='n' or pah =='N':
@@ -223,6 +222,7 @@ def deconvolute(item, save, verbose, bs_line):
 	plt.ylabel("Intensity")
 	plt.xlabel("cm-1")
 	plt.legend()
+	plt.grid()
 	if(save):
 		plt.savefig(item[:-3]+'png')
 
@@ -231,6 +231,9 @@ def deconvolute(item, save, verbose, bs_line):
 
 
 if __name__ == '__main__':
+	print("#########################################################")
+	print("............Deconvolution of RAMAN spectra...............")
+	print("#########################################################\n")
 	parser = ap.ArgumentParser(description='Deconvolution of Raman spectra')
 	parser.add_argument('-s','--save', action='store_true', help='Saves the result of the fit (image and report sheet)')
 	parser.add_argument('-p','--path', action='store_true', help='processes all the files in the directory')
