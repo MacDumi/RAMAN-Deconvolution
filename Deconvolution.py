@@ -151,7 +151,7 @@ def deconvolute(item, save, verbose, bs_line):
 			try:
 				deg = int(input("New degree: "))
 			except ValueError:
-			print("New degree is set to: %d" %deg)
+				print("New degree is set to: %d" %deg)
 			degree = deg
 			baseline = peakutils.baseline(y, degree) #baseline
 			intensity = y - baseline
