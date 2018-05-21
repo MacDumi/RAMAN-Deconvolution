@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 import numpy as np
-import math as mt
 import matplotlib.pyplot as plt
 import matplotlib
 import peakutils
