@@ -24,3 +24,9 @@ The script has an integrated "spike" detector. To detect "spikes" the moving ave
 Polynomial degree for the baseline
 
 By default the baseline will be calculated using a first degree polynomial function. However, the user is able to change the degree of the poly-function if the baseline does not fit the experimental data. A plot with the calculated baseline and the experimental data is displayed after each attempt.
+
+Dependencies
+
+Before runnig this script, please make sure that Python3 and following libraries are 
+installed:
+	numpy, matplotlib, peakutils, scipy, argparse, glob, os
