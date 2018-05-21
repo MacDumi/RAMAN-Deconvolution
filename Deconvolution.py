@@ -15,30 +15,33 @@ from scipy import asarray as ar,exp
 degree = 1 #polynomial degree for the baseline
 
 #initial position (PAH, D4, D1, D3, G, D2)
-freq = [1611, 1168, 1353, 1517, 1585, 1280] 
+freq = [1611, 1168, 1353, 1517, 1585, 1280]
 names = ['D2', 'D4', 'D1', 'D3', 'G', 'PAH']
 
 #shape of the peaks (PAH, D4, D1, D3, G, D2)
-shape = ['L', 'L', 'L', 'G', 'L', 'L'] 
+shape = ['L', 'L', 'L', 'G', 'L', 'L']
 
 #bounds
-lower = [0, 0, 1599, 0, 0, 1127, 0, 0, 1343, 0, 0, 1489, 0, 0, 1571, 0, 0, 1230]
-upper = [np.inf, np.inf, 1624, np.inf, np.inf, 1208, np.inf, np.inf, 1358, np.inf, 
+lower = [10, 10, 1599, 10, 10, 1127, 10, 10, 1343, 10, 10, 1489, 10, 10, 1571,
+		10, 10, 1230]
+upper = [np.inf, np.inf, 1624, np.inf, np.inf, 1208, np.inf, np.inf, 1358, np.inf,
 		np.inf, 1545, np.inf, np.inf, 1598, np.inf, np.inf, 1300]
 #data limits
-limit = [1000, 1900]
+limit = [950, 1950]
 
 #number of peaks: True=six, False=five
-six = False 
+six = False
 ####################################
-
+#Spike detection routine
+spike_detect = False
+###################################
 font = {'family': 'serif',
 		'color':  'darkred',
 		'weight': 'normal',
 		'size': 14,
 		}
 answ = ['n', 'N']
-thrsh = 0.035
+thrsh = 0.08
 def Peak(x, pars):
 	I = pars[0]  # peak height
 	gamma = pars[1]  # ~widht
@@ -51,7 +54,7 @@ def Peak(x, pars):
 		print("unknown parameter")
 		return 0
 
-def six_peaks(t, *pars):    
+def six_peaks(t, *pars):
 	'function of six overlapping peaks'
 	global six
 	p1 = Peak(t, [pars[0], pars[1], pars[2], shape[0]])
@@ -63,10 +66,10 @@ def six_peaks(t, *pars):
 		p6 = Peak(t, [pars[15], pars[16], pars[17], shape[5]])
 		return p1 + p2 + p3 + p4 + p5 + p6
 	else:
-		return p1 + p2 + p3 + p4 + p5 
-	
+		return p1 + p2 + p3 + p4 + p5
 
-def plot_peaks(t, *pars):    
+
+def plot_peaks(t, *pars):
 	'plot six overlapping peaks (PAH, D4, D1, D3, G, D2)'
 	global six
 	plt.plot(t, Peak(t, [pars[0], pars[1], pars[2], shape[0]]), label ='D2')
@@ -92,7 +95,7 @@ def print_result(t, item, save, verbose, *pars):
 		output = open(item[:-4]+"_fit_result.txt", "w")
 		output.writelines(text)
 		output.close()
-	
+
 def detect_spikes(y):
 	#detect spikes
 	spikes=[]
@@ -104,7 +107,7 @@ def detect_spikes(y):
 			spikes = np.unique(spikes)
 	spikes = spikes[::-1]
 	return [int(spk) for spk in spikes]
-	
+
 def plot_baseline(x, y,baseline, spikes):
 	plt.close()
 	fig = plt.figure(figsize=(12,8))
@@ -117,10 +120,11 @@ def plot_baseline(x, y,baseline, spikes):
 	plt.legend()
 	plt.grid()
 	plt.show(block=False)
-		
+
 def deconvolute(item, save, verbose, bs_line):
-	global six, thrsh
+	global six, thrsh, degree
 	menu_flag = False
+	bs_flag = True
 	data = np.loadtxt(item, skiprows = 2) #load data
 	if data[0,0]>limit[0]:
 		limit[0]=data[0,0]
@@ -133,48 +137,64 @@ def deconvolute(item, save, verbose, bs_line):
 	#baseline
 	baseline = peakutils.baseline(y, degree) #baseline
 	intensity = y - baseline
-	
-	spikes = detect_spikes(y)
-	
+	if spike_detect:
+		spikes = detect_spikes(y)
+	else:
+		spikes = []
 	#plot the baseline and spikes
 	if bs_line:
 		plot_baseline(x, y, baseline, spikes)
-	
-	#Remove the spikes or not?
-	while not menu_flag:
-		if verbose:
-			if spikes:
-				spk = input("Remove the spikes? Y/n: ")
-			else:
-				spk ='n'
+	while bs_flag and verbose:
+		other_deg = input("Current polynomial degree for the baseline: %d\nDo you want to try with a different one? [N/y]" %degree)
+		print(other_deg)
+		if other_deg in ['Y', 'y']:
+			try:
+				deg = int(input("New degree: "))
+			except ValueError:
+			print("New degree is set to: %d" %deg)
+			degree = deg
+			baseline = peakutils.baseline(y, degree) #baseline
+			intensity = y - baseline
+			plot_baseline(x, y, baseline, spikes)
 		else:
-			spk='y'
-		if spk in answ:
-			try_again = input("Would you like to try again with a different threshold value? Y/n: ")
-			if try_again in answ:
+			bs_flag =False
+
+	if spike_detect:
+            #Remove the spikes or not?
+		while not menu_flag:
+			if verbose:
+				if spikes:
+					spk = input("Remove the spikes? Y/n: ")
+				else:
+					spk ='n'
+			else:
+				spk='y'
+			if spk in answ:
+				try_again = input("Would you like to try again with a different threshold value? Y/n: ")
+				if try_again in answ:
+					menu_flag=True
+				else:
+					print("Current value is %.1f%%" %(thrsh*100))
+					try:
+						thrsh = float(input("New value (in %): "))/100
+					except ValueError:
+						print("Only numbers are allowed")
+					print("New value is %.1f%%" %(thrsh*100))
+					spikes = detect_spikes(y)
+					plot_baseline(x, y, baseline, spikes)
+			else:
+				#remove spikes
+				print("Removing the spikes")
 				menu_flag=True
-			else:
-				print("Current value is %.1f%%" %(thrsh*100))
-				try:
-					thrsh = float(input("New value (in %): "))/100
-				except ValueError:
-					print("Only numbers are allowed")
-				print("New value is %.1f%%" %(thrsh*100))
-				spikes = detect_spikes(y)
-				plot_baseline(x, y, baseline, spikes)
-		else:
-			#remove spikes
-			print("Removing the spikes")
-			menu_flag=True
-			for idx in spikes:
-				intensity = np.delete(intensity, idx)
-				x = np.delete(x, idx)
-		
+				for idx in spikes:
+					intensity = np.delete(intensity, idx)
+					x = np.delete(x, idx)
+
 	#get the number of peaks to fit with
 	print("\n*********Deconvolution***********")
 	if verbose:
 		pah = input("Take into account the PAH band? Y/n: ")
-	else: 
+	else:
 		pah='y'
 	if pah =='n' or pah =='N':
 		six=False
@@ -185,9 +205,9 @@ def deconvolute(item, save, verbose, bs_line):
 
 	#weight for fitting....note:lower sigma->higher weight
 	sigma =np.ones(len(x))*1.2
-	sigma[np.abs(x-1450)<50]=0.8	
+	sigma[np.abs(x-1450)<50]=0.8
 	#initial guess
-	parguess = (5000, 25, freq[0], 1000, 50, freq[1], 5000, 60, freq[2], 
+	parguess = (5000, 25, freq[0], 10000, 50, freq[1], 5000, 60, freq[2],
 			2000, 70, freq[3], 10000, 30, freq[4], 10000, 25, freq[5])
 	#fit the data
 	popt, pcov = curve_fit(six_peaks, x, intensity, parguess,sigma=sigma, bounds = [lower, upper])
@@ -205,19 +225,24 @@ def deconvolute(item, save, verbose, bs_line):
 	plt.legend()
 	if(save):
 		plt.savefig(item[:-3]+'png')
-		
-	
-	
-	
-	
+
+
+
+
+
 if __name__ == '__main__':
 	parser = ap.ArgumentParser(description='Deconvolution of Raman spectra')
 	parser.add_argument('-s','--save', action='store_true', help='Saves the result of the fit (image and report sheet)')
 	parser.add_argument('-p','--path', action='store_true', help='processes all the files in the directory')
+	parser.add_argument('-f','--filter', action='store_true', help='Detects and removes spikes')
 	parser.add_argument('name', help='File name')
 	args = parser.parse_args()
 	matplotlib.rcParams.update({'font.size': 14})
+	spike_detect= args.filter
 	if (args.path):
+		if spike_detect:
+			print("spike detector cannot be used in this mode")
+			spike_detect = False
 		files = glob.glob(args.name+"*.txt")
 		for item in files:
 			print(item+" proccessed")
