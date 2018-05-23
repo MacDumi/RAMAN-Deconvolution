@@ -26,7 +26,7 @@ lower = [10, 10, 1599, 10, 10, 1127, 10, 10, 1343, 10, 10, 1489, 10, 10, 1571,
 upper = [np.inf, np.inf, 1624, np.inf, np.inf, 1208, np.inf, np.inf, 1358, np.inf,
 		np.inf, 1545, np.inf, np.inf, 1598, np.inf, np.inf, 1300]
 #data limits
-limit = [950, 1950]
+limit = [900, 1850]
 
 #number of peaks: True=six, False=five
 six = False
@@ -149,7 +149,7 @@ def deconvolute(item, save, verbose, bs_line):
 			try:
 				deg = int(input("New degree: "))
 			except ValueError:
-				print("New degree is set to: %d" %deg)
+				print("Only numerical values are allowed")
 			degree = deg
 			baseline = peakutils.baseline(y, degree) #baseline
 			intensity = y - baseline
