@@ -108,17 +108,18 @@ def detect_spikes(y):
 	return [int(spk) for spk in spikes]
 
 def plot_baseline(x, y,baseline, spikes):
-	plt.close()
-	fig = plt.figure(figsize=(12,8))
-	ax = fig.add_subplot(111)
-	ax.plot(x, y, label = 'Experimental data')
-	ax.plot(x[spikes], y[spikes], 'ro', label='Spikes')
-	ax.plot(x, baseline, 'r--', label = 'Baseline')
-	plt.ylabel("Intensity")
-	plt.xlabel("cm-1")
-	plt.legend()
-	plt.grid()
-	plt.show(block=False)
+        plt.close()
+        fig = plt.figure(figsize=(12,8))
+        ax = fig.add_subplot(111)
+        ax.plot(x, y, label = 'Experimental data')
+        if len(spikes):
+            ax.plot(x[spikes], y[spikes], 'ro', label='Spikes')
+        ax.plot(x, baseline, 'r--', label = 'Baseline')
+        plt.ylabel("Intensity")
+        plt.xlabel("cm-1")
+        plt.legend()
+        plt.grid()
+        plt.show(block=False)
 
 def deconvolute(item, save, verbose, bs_line):
 	global six, thrsh, degree
