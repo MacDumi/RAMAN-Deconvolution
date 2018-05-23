@@ -26,7 +26,7 @@ lower = [10, 10, 1599, 10, 10, 1127, 10, 10, 1343, 10, 10, 1489, 10, 10, 1571,
 upper = [np.inf, np.inf, 1624, np.inf, np.inf, 1208, np.inf, np.inf, 1358, np.inf,
 		np.inf, 1545, np.inf, np.inf, 1598, np.inf, np.inf, 1300]
 #data limits
-limit = [900, 1850]
+limit = [750, 1990]
 
 #number of peaks: True=six, False=five
 six = False
@@ -215,7 +215,7 @@ def deconvolute(item, save, verbose, bs_line):
 	#plot everything
 	fig_res = plt.figure(figsize=(12,8))
 	ax_r = fig_res.add_subplot(111)
-	ax_r.plot(x, intensity,label='Experimental data')
+	ax_r.scatter(x, intensity,s=5, label='Experimental data')
 
 	plt.plot(x, six_peaks(x, *popt), 'r--', label='Cumulative')
 	plot_peaks(x, *popt);
@@ -225,9 +225,6 @@ def deconvolute(item, save, verbose, bs_line):
 	plt.grid()
 	if(save):
 		plt.savefig(item[:-3]+'png')
-
-
-
 
 
 if __name__ == '__main__':
