@@ -97,7 +97,7 @@ def plot_peaks(t, axis, bsline, *pars):
 	for i in np.arange(0, len(nm)):
 		axis.plot(t, Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], shape[i]]) +bsline, linewidth = 2,linestyle = ln_style[i][1], label =nm[i])
 
-def print_result(t, out, item, save, verbose, pars):
+def print_result(t, out, item, save, verbose, pars, perr):
 	text = "****************BASELINE*******************\nSlope: %.4f\nIntercept: %.4f\n"%(pars[0], pars[1])
 	nm=names
 	area =[]
@@ -108,7 +108,7 @@ def print_result(t, out, item, save, verbose, pars):
 	for i in np.arange(0, len(nm)):
 		out[nm[i]] = Peak(t, [pars[3*i+2], pars[3*i+3], pars[3*i+4], shape[i]])
 		fwhm = FWHM(t, out[nm[i]])
-		text = text +"Peak %s:\n	Centre: %.4f cm-1\n	Amplitude: %.4f\n	gamma: %.4f\n	FWHM: %.4f\n" %(names[i], pars[3*i+4], pars[3*i+2], pars[3*i+3], fwhm)
+		text = text +"Peak %s:\n	Centre: %.4f +/- %.4f cm-1\n	Amplitude: %.4f +/- %.4f\n	gamma: %.4f +/- %.4f\n	FWHM: %.4f\n" %(names[i], pars[3*i+4], perr[3*i+2], pars[3*i+2], perr[3*i], pars[3*i+3], perr[3*i+1], fwhm)
 		area = np.append(area ,np.trapz(Peak(t, [pars[3*i+2], pars[3*i+3], pars[3*i+4], shape[i]]), x = t))
 		intensity = np.append(intensity, pars[3*i+2])
 		text = text +"	Area = %f\n" %area[i]
@@ -252,13 +252,14 @@ def deconvolute(item, save, verbose, bs_line):
 			2000, 70, freq[3], 10000, 30, freq[4], 10000, 25, freq[5])
 	#fit the data
 	popt, pcov = curve_fit(six_peaks, x, intensity, parguess,sigma=sigma, bounds = [lower, upper])
+	perr= np.sqrt(np.diag(pcov))
 	#output
 	out = pd.DataFrame()
 	out['Raman shift'] = x
 	out['Raw data'] = intensity+baseline
 	out['Baseline'] = baseline
 	#fit result
-	print_result(x, out, item, save, verbose, np.append([slope, intercept],popt))
+	print_result(x, out, item, save, verbose, np.append([slope, intercept],popt), perr)
 	#plot everything
 	fig_res = plt.figure(figsize=(12,8))
 	ax_r = fig_res.add_subplot(111)
