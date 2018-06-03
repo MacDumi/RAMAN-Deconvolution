@@ -15,18 +15,32 @@ from scipy import asarray as ar,exp
 #Parameters
 degree = 1 #polynomial degree for the baseline
 
+#Enable Voigt fitting
+voigt = False
 #initial position (PAH, D4, D1, D3, G, D2)
-freq = [1611, 1168, 1353, 1517, 1585, 1280]
+freq = [1611, 1168, 1353, 1500, 1585, 1280]
 names = ['D2', 'D4', 'D1', 'D3', 'G', 'PAH']
 
-#shape of the peaks (PAH, D4, D1, D3, G, D2)
-shape = ['L', 'L', 'L', 'G', 'L', 'L']
 
-#bounds
-lower = [10, 10, 1599, 10, 10, 1127, 10, 10, 1343, 10, 10, 1489, 10, 10, 1571,
+if voigt:
+	#shape of the peaks (PAH, D4, D1, D3, G, D2)
+	#L - lorentzian, G - gaussian, V - voigt
+	shape = ['V', 'V', 'V', 'V', 'V', 'V']
+	#bounds
+	lower = [10, 10, 1599, 0, 10, 10, 1127, 0, 10, 10, 1343, 0, 10, 10, 1489, 0, 10, 10, 1571, 0,
+		10, 10, 1230, 0]
+	upper = [np.inf, np.inf, 1624, 1, np.inf, np.inf, 1208, 1, np.inf, np.inf, 1358, 1, np.inf,
+		np.inf, 1545, 1, np.inf, np.inf, 1598, 1, np.inf, np.inf, 1300, 1]
+
+else:
+	shape = ['L', 'L', 'L', 'G', 'L', 'L']
+		#bounds
+	lower = [10, 10, 1599,  10, 10, 1127, 10, 10, 1343, 10, 10, 1489, 10, 10, 1571,
 		10, 10, 1230]
-upper = [np.inf, np.inf, 1624, np.inf, np.inf, 1208, np.inf, np.inf, 1358, np.inf,
+	upper = [np.inf, np.inf, 1624, np.inf, np.inf, 1208, np.inf, np.inf, 1358, np.inf,
 		np.inf, 1545, np.inf, np.inf, 1598, np.inf, np.inf, 1300]
+
+
 #data limits
 limit = [750, 1990]
 
@@ -51,19 +65,29 @@ linestyles = OrderedDict(
      ('dashdotted',          (0, (3, 4, 1, 4))),
      ('densely dashdotted',  (0, (3, 1, 1, 1))),
 
-     ('dashdotdotted',         (0, (3, 5, 1, 5, 1, 5))),
+     ('dashdotdotted',         (0, (3, 4, 1, 4, 1, 4))),
      ('densely dashdotdotted', (0, (3, 1, 1, 1, 1, 1)))])
 ln_style = list(linestyles.items())
 answ = ['n', 'N']
 thrsh = 0.08
+
+def Voigt(x, I, x0, s, n):
+	return n*I/(1+((x - x0)**2 /s**2)) + (1-n)*I*exp(-(x-x0)**2/(2*s**2))
+def gauss(x, I, x0, s):
+	return I*exp(-(x-x0)**2/(2*s**2))
+def lorents(x, I, x0, s):
+	return I/ (1+((x - x0)**2 /s**2))
+
 def Peak(x, pars):
 	I = pars[0]  # peak height
 	gamma = pars[1]  # ~widht
 	x0 = pars[2]  # centre
-	if (pars[3] =='G'): #if gaussian
-		return I*exp(-(x-x0)**2/(2*gamma**2))
+	if (pars[3] =='V'): #if gaussian
+		return Voigt(x, I, x0, gamma, pars[4])
+	elif (pars[3] =='G'): #if gaussian
+		return Voigt(x, I, x0, gamma, 0)
 	elif (pars[3] =='L'): #if lorentzian
-		return I * gamma**2 / ((x - x0)**2 + gamma**2)
+		return Voigt(x, I, x0, gamma, 1)
 	else:
 		print("unknown parameter")
 		return 0
@@ -74,7 +98,10 @@ def six_peaks(t, *pars):
 	nm=names
 	if not six:
 		nm = names[:-1]
-	return np.sum([Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], shape[i]]) for i in np.arange(0, len(nm))], axis = 0)
+	if voigt:
+		return np.sum([Peak(t, [pars[4*i], pars[4*i+1], pars[4*i+2], shape[i], pars[4*i+3]]) for i in np.arange(0, len(nm))], axis = 0)
+	else:
+		return np.sum([Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], shape[i]]) for i in np.arange(0, len(nm))], axis = 0)
 
 def FWHM(X,Y):
 	difference = max(Y) - min(Y)
@@ -95,7 +122,10 @@ def plot_peaks(t, axis, bsline, *pars):
 	if not six:
 		nm = names[:-1]
 	for i in np.arange(0, len(nm)):
-		axis.plot(t, Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], shape[i]]) +bsline, linewidth = 2,linestyle = ln_style[i][1], label =nm[i])
+		if voigt:
+			axis.plot(t, Peak(t, [pars[4*i], pars[4*i+1], pars[4*i+2], shape[i], pars[4*i+3]]) +bsline, linewidth = 2,linestyle = ln_style[i][1], label =nm[i])
+		else:
+			axis.plot(t, Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], shape[i]]) +bsline, linewidth = 2,linestyle = ln_style[i][1], label =nm[i])
 
 def print_result(t, out, item, save, verbose, pars, perr):
 	text = "****************BASELINE*******************\nSlope: %.4f\nIntercept: %.4f\n"%(pars[0], pars[1])
@@ -106,16 +136,23 @@ def print_result(t, out, item, save, verbose, pars, perr):
 	if not six:
 		nm = names[:-1]
 	for i in np.arange(0, len(nm)):
-		out[nm[i]] = Peak(t, [pars[3*i+2], pars[3*i+3], pars[3*i+4], shape[i]])
-		fwhm = FWHM(t, out[nm[i]])
-		text = text +"Peak %s:\n	Centre: %.4f +/- %.4f cm-1\n	Amplitude: %.4f +/- %.4f\n	gamma: %.4f +/- %.4f\n	FWHM: %.4f\n" %(names[i], pars[3*i+4], perr[3*i+2], pars[3*i+2], perr[3*i], pars[3*i+3], perr[3*i+1], fwhm)
-		area = np.append(area ,np.trapz(Peak(t, [pars[3*i+2], pars[3*i+3], pars[3*i+4], shape[i]]), x = t))
-		intensity = np.append(intensity, pars[3*i+2])
-		text = text +"	Area = %f\n" %area[i]
+		if voigt:
+			out[nm[i]] = Peak(t, [pars[4*i+2], pars[4*i+3], pars[4*i+4], shape[i], pars[4*i+5]])
+			fwhm = FWHM(t, out[nm[i]])
+			text = text +"Peak %s:\n	Centre: %.4f +/- %.4f cm-1\n	Amplitude: %.4f +/- %.4f\n	gamma: %.4f +/- %.4f\n	FWHM: %.4f\n" %(names[i], pars[4*i+4], perr[4*i+2], pars[4*i+2], perr[4*i], pars[4*i+3], perr[4*i+1], fwhm)
+			area = np.append(area ,np.trapz(Peak(t, [pars[4*i+2], pars[4*i+3], pars[4*i+4], shape[i], pars[4*i+5]]), x = t))
+			text = text +"	L/G ratio = %.4f\n" %pars[4*i+5]
+		else:
+			out[nm[i]] = Peak(t, [pars[3*i+2], pars[3*i+3], pars[3*i+4], shape[i]])
+			fwhm = FWHM(t, out[nm[i]])
+			text = text +"Peak %s:\n	Centre: %.4f +/- %.4f cm-1\n	Amplitude: %.4f +/- %.4f\n	gamma: %.4f +/- %.4f\n	FWHM: %.4f\n" %(names[i], pars[3*i+4], perr[3*i+2], pars[3*i+2], perr[3*i], pars[3*i+3], perr[3*i+1], fwhm)
+			area = np.append(area ,np.trapz(Peak(t, [pars[3*i+2], pars[3*i+3], pars[3*i+4], shape[i]]), x = t))
+		intensity = np.append(intensity, pars[4*i+2])
+		text = text +"	Area = %.4f\n" %area[i]
 	out['Cumulative'] = np.sum(out.values[:,3:], axis=1)
 	text = text +"\n**************Ratio - Amplitude************\n	D1/G= %.4f\n	D1/(G+D1+D2)= %.4f\n	D4/G= %.4f\n" %(intensity[2]/intensity[4], intensity[2]/(intensity[4]+intensity[0]+intensity[2]), intensity[1]/intensity[4])
 	text = text +"\n**************Ratio - Areas****************\n	D1/G= %.4f\n	D1/(G+D1+D2)= %.4f\n	D4/G= %.4f\n" %(area[2]/area[4], area[2]/(area[4]+area[0]+area[2]), area[1]/area[4])
-	
+
 	if verbose:
 		print(text)
 	if save:
@@ -158,7 +195,7 @@ def deconvolute(item, save, verbose, bs_line):
 	if save:
 		if not os.path.exists(item[:-4]):
 			os.makedirs(item[:-4])
-	
+
 	data = np.loadtxt(item, skiprows = 2) #load data
 	if data[0,0]>limit[0]:
 		limit[0]=data[0,0]
@@ -168,8 +205,8 @@ def deconvolute(item, save, verbose, bs_line):
 	high = np.argwhere(data[:,0]>limit[1])[0,0]
 	x = data[low:high, 0]
 	y= data[low:high, 1]
-	
-	
+
+
 	#baseline
 	baseline = peakutils.baseline(y, degree) #baseline
 	if degree ==1:
@@ -247,8 +284,13 @@ def deconvolute(item, save, verbose, bs_line):
 	sigma[np.abs(x-1450)<50]=0.8
 	sigma[np.abs(x-1000)<50]=0.8
 	sigma[np.abs(x-1900)<50]=0.7
-	#initial guess
-	parguess = (5000, 25, freq[0], 10000, 50, freq[1], 5000, 60, freq[2],
+
+	if voigt:
+		#initial guess
+		parguess = (5000, 25, freq[0], 0.5, 10000, 50, freq[1], 0.5, 5000, 60, freq[2], 0.5,
+			2000, 70, freq[3], 0.5, 10000, 30, freq[4], 0.5, 10000, 25, freq[5], 0.5)
+	else:
+		parguess = (5000, 25, freq[0],  10000, 50, freq[1],  5000, 60, freq[2],
 			2000, 70, freq[3], 10000, 30, freq[4], 10000, 25, freq[5])
 	#fit the data
 	popt, pcov = curve_fit(six_peaks, x, intensity, parguess,sigma=sigma, bounds = [lower, upper])
@@ -257,6 +299,7 @@ def deconvolute(item, save, verbose, bs_line):
 	out = pd.DataFrame()
 	out['Raman shift'] = x
 	out['Raw data'] = intensity+baseline
+	out['No_baseline'] = intensity
 	out['Baseline'] = baseline
 	#fit result
 	print_result(x, out, item, save, verbose, np.append([slope, intercept],popt), perr)
