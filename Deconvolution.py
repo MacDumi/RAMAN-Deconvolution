@@ -16,7 +16,7 @@ from scipy import asarray as ar,exp
 degree = 1 #polynomial degree for the baseline
 
 #Enable Voigt fitting
-voigt = False
+voigt = True
 #initial position (PAH, D4, D1, D3, G, D2)
 freq = [1611, 1168, 1353, 1500, 1585, 1280]
 names = ['D2', 'D4', 'D1', 'D3', 'G', 'PAH']
@@ -42,7 +42,7 @@ else:
 
 
 #data limits
-limit = [750, 1990]
+limit = [650, 2400]
 
 #number of peaks: True=six, False=five
 six = False
@@ -182,7 +182,7 @@ def plot_baseline(x, y,baseline, spikes):
 			ax.plot(x[spikes], y[spikes], 'ro', label='Spikes')
 		ax.plot(x, baseline, 'r--', label = 'Baseline')
 		plt.ylabel("Intensity")
-		plt.xlabel("cm-1")
+		plt.xlabel("Raman shift, $cm^{-1}$")
 		plt.legend()
 		plt.grid()
 		plt.show(block=False)
@@ -310,7 +310,7 @@ def deconvolute(item, save, verbose, bs_line):
 	plot_peaks(x, ax_r, np.zeros(len(baseline)), *popt);
 	ax_r.plot(x, intensity,'o',markersize=3, color = '#1E68FF',label='Experimental data')
 	ax_r.set_ylabel("Intensity")
-	ax_r.set_xlabel("Raman shift, cm-1")
+	ax_r.set_xlabel("Raman shift, $cm^{-1}$")
 	ax_r.legend()
 	ax_r.grid()
 	plt.tight_layout()
@@ -322,7 +322,7 @@ def deconvolute(item, save, verbose, bs_line):
 	plot_peaks(x,ax_r_b, baseline, *popt);
 	ax_r_b.plot(x, y,'o',markersize=3, color = '#1E68FF', label='Experimental data')
 	ax_r_b.set_ylabel("Intensity")
-	ax_r_b.set_xlabel("Raman shift, cm-1")
+	ax_r_b.set_xlabel("Raman shift, $cm^{-1}$")
 	ax_r_b.legend()
 	ax_r_b.grid()
 	plt.tight_layout()
