@@ -13,10 +13,10 @@ from scipy import asarray as ar,exp
 
 ####################################
 #Parameters
-degree = 1 #polynomial degree for the baseline
+degree = 3 #polynomial degree for the baseline
 
 #Enable Voigt fitting
-voigt = True
+voigt = False
 #initial position (PAH, D4, D1, D3, G, D2)
 freq = [1611, 1168, 1353, 1500, 1585, 1280]
 names = ['D2', 'D4', 'D1', 'D3', 'G', 'PAH']
@@ -35,15 +35,17 @@ if voigt:
 else:
 	shape = ['L', 'L', 'L', 'G', 'L', 'L']
 		#bounds
-	lower = [10, 10, 1599,  10, 10, 1127, 10, 10, 1343, 10, 10, 1489, 10, 10, 1571,
+	lower = [10, 10, 1599,	10, 10, 1127, 10, 10, 1343, 10, 10, 1489, 10, 10, 1571,
 		10, 10, 1230]
 	upper = [np.inf, np.inf, 1624, np.inf, np.inf, 1208, np.inf, np.inf, 1358, np.inf,
 		np.inf, 1545, np.inf, np.inf, 1598, np.inf, np.inf, 1300]
 
 
 #data limits
-limit = [650, 2400]
+limit = [650, 2800]
 
+#Region with peaks which will be avoided for the baseline fitting
+peakR =[900, 1800]
 #number of peaks: True=six, False=five
 six = False
 ####################################
@@ -62,10 +64,10 @@ linestyles = OrderedDict(
 
      ('densely dashed',      (0, (5, 1))),
 
-     ('dashdotted',          (0, (3, 4, 1, 4))),
+     ('dashdotted',	     (0, (3, 4, 1, 4))),
      ('densely dashdotted',  (0, (3, 1, 1, 1))),
 
-     ('dashdotdotted',         (0, (3, 4, 1, 4, 1, 4))),
+     ('dashdotdotted',	       (0, (3, 4, 1, 4, 1, 4))),
      ('densely dashdotdotted', (0, (3, 1, 1, 1, 1, 1)))])
 ln_style = list(linestyles.items())
 answ = ['n', 'N']
@@ -112,7 +114,7 @@ def FWHM(X,Y):
 
 	nearest_above = (np.abs(Y[pos_extremum:-1] - HM)).idxmin()
 	nearest_below = (np.abs(Y[0:pos_extremum] - HM)).idxmin()
-	return  (np.mean(X[nearest_above ]) - np.mean(X[nearest_below]))
+	return	(np.mean(X[nearest_above ]) - np.mean(X[nearest_below]))
 
 
 def plot_peaks(t, axis, bsline, *pars):
@@ -127,8 +129,10 @@ def plot_peaks(t, axis, bsline, *pars):
 		else:
 			axis.plot(t, Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], shape[i]]) +bsline, linewidth = 2,linestyle = ln_style[i][1], label =nm[i])
 
-def print_result(t, out, item, save, verbose, pars, perr):
-	text = "****************BASELINE*******************\nSlope: %.4f\nIntercept: %.4f\n"%(pars[0], pars[1])
+def print_result(t, out, item, save, verbose, pars, perr, bs_coef):
+	degree = len(bs_coef)-1
+	text = "****************BASELINE*******************\nDegree: %d\nCoefficients (starting with the fighest power):\n"%degree
+	text = text + str(bs_coef)
 	nm=names
 	area =[]
 	intensity = []
@@ -137,17 +141,18 @@ def print_result(t, out, item, save, verbose, pars, perr):
 		nm = names[:-1]
 	for i in np.arange(0, len(nm)):
 		if voigt:
-			out[nm[i]] = Peak(t, [pars[4*i+2], pars[4*i+3], pars[4*i+4], shape[i], pars[4*i+5]])
+			out[nm[i]] = Peak(t, [pars[4*i], pars[4*i+1], pars[4*i+2], shape[i], pars[4*i+5]])
 			fwhm = FWHM(t, out[nm[i]])
-			text = text +"Peak %s:\n	Centre: %.4f +/- %.4f cm-1\n	Amplitude: %.4f +/- %.4f\n	gamma: %.4f +/- %.4f\n	FWHM: %.4f\n" %(names[i], pars[4*i+4], perr[4*i+2], pars[4*i+2], perr[4*i], pars[4*i+3], perr[4*i+1], fwhm)
-			area = np.append(area ,np.trapz(Peak(t, [pars[4*i+2], pars[4*i+3], pars[4*i+4], shape[i], pars[4*i+5]]), x = t))
-			text = text +"	L/G ratio = %.4f\n" %pars[4*i+5]
+			text = text +"Peak %s:\n	Centre: %.4f +/- %.4f cm-1\n	Amplitude: %.4f +/- %.4f\n	gamma: %.4f +/- %.4f\n	FWHM: %.4f\n" %(names[i], pars[4*i+2], perr[4*i+2], pars[4*i], perr[4*i], pars[4*i+1], perr[4*i+1], fwhm)
+			area = np.append(area ,np.trapz(Peak(t, [pars[4*i], pars[4*i+1], pars[4*i+2], shape[i], pars[4*i+3]]), x = t))
+			text = text +"	L/G ratio = %.4f\n" %pars[4*i+3]
+			intensity = np.append(intensity, pars[4*i])
 		else:
-			out[nm[i]] = Peak(t, [pars[3*i+2], pars[3*i+3], pars[3*i+4], shape[i]])
+			out[nm[i]] = Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], shape[i]])
 			fwhm = FWHM(t, out[nm[i]])
-			text = text +"Peak %s:\n	Centre: %.4f +/- %.4f cm-1\n	Amplitude: %.4f +/- %.4f\n	gamma: %.4f +/- %.4f\n	FWHM: %.4f\n" %(names[i], pars[3*i+4], perr[3*i+2], pars[3*i+2], perr[3*i], pars[3*i+3], perr[3*i+1], fwhm)
-			area = np.append(area ,np.trapz(Peak(t, [pars[3*i+2], pars[3*i+3], pars[3*i+4], shape[i]]), x = t))
-		intensity = np.append(intensity, pars[4*i+2])
+			text = text +"Peak %s:\n	Centre: %.4f +/- %.4f cm-1\n	Amplitude: %.4f +/- %.4f\n	gamma: %.4f +/- %.4f\n	FWHM: %.4f\n" %(names[i], pars[3*i+2], perr[3*i+2], pars[3*i], perr[3*i], pars[3*i+1], perr[3*i+1], fwhm)
+			area = np.append(area ,np.trapz(Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], shape[i]]), x = t))
+			intensity = np.append(intensity, pars[3*i])
 		text = text +"	Area = %.4f\n" %area[i]
 	out['Cumulative'] = np.sum(out.values[:,3:], axis=1)
 	text = text +"\n**************Ratio - Amplitude************\n	D1/G= %.4f\n	D1/(G+D1+D2)= %.4f\n	D4/G= %.4f\n" %(intensity[2]/intensity[4], intensity[2]/(intensity[4]+intensity[0]+intensity[2]), intensity[1]/intensity[4])
@@ -197,6 +202,7 @@ def deconvolute(item, save, verbose, bs_line):
 			os.makedirs(item[:-4])
 
 	data = np.loadtxt(item, skiprows = 2) #load data
+
 	if data[0,0]>limit[0]:
 		limit[0]=data[0,0]
 	low = np.argwhere(data[:,0]>limit[0])[0,0]
@@ -206,11 +212,18 @@ def deconvolute(item, save, verbose, bs_line):
 	x = data[low:high, 0]
 	y= data[low:high, 1]
 
+	#TO DO: IMPORVE THIS PART, MAKE IT MORE EFFICIENT
+	data =data[low:high,:]
 
-	#baseline
-	baseline = peakutils.baseline(y, degree) #baseline
+	#Select the part without peaks and fit a polynomial function
+	data_BSL = np.vstack((data[:np.argwhere(x>peakR[0])[0][0],:],data[np.argwhere(x>peakR[1])[0][0]:,:]))
+	bs_coef = np.polyfit(data_BSL[:,0],data_BSL[:,1],degree)
+	fit = np.poly1d(bs_coef)
+	baseline = fit(x)
+
+	#baseline = peakutils.baseline(y, degree) #baseline
 	if degree ==1:
-		slope, intercept = np.polyfit(x, baseline, 1)
+		slope, intercept = fit_coef
 	else:
 		slope, intercept = -1, -1
 	intensity = y - baseline
@@ -229,7 +242,9 @@ def deconvolute(item, save, verbose, bs_line):
 			except ValueError:
 				print("Only numerical values are allowed")
 			degree = deg
-			baseline = peakutils.baseline(y, degree) #baseline
+			fit_coef = np.polyfit(data_BSL[:,0],data_BSL[:,1],degree)
+			fit = np.poly1d(fit_coef)
+			baseline = fit(x) #baseline
 			intensity = y - baseline
 			baseLN = plot_baseline(x, y, baseline, spikes)
 		else:
@@ -282,18 +297,18 @@ def deconvolute(item, save, verbose, bs_line):
 	#weight for fitting....note:lower sigma->higher weight
 	sigma =np.ones(len(x))*2
 	sigma[np.abs(x-1450)<50]=0.8
-	sigma[np.abs(x-1000)<50]=0.8
-	sigma[np.abs(x-1900)<50]=0.7
+	sigma[np.abs(x-900)<100]=0.8
+	sigma[np.abs(x-1800)<100]=0.7
 
 	if voigt:
 		#initial guess
 		parguess = (5000, 25, freq[0], 0.5, 10000, 50, freq[1], 0.5, 5000, 60, freq[2], 0.5,
 			2000, 70, freq[3], 0.5, 10000, 30, freq[4], 0.5, 10000, 25, freq[5], 0.5)
 	else:
-		parguess = (5000, 25, freq[0],  10000, 50, freq[1],  5000, 60, freq[2],
+		parguess = (5000, 25, freq[0],	10000, 50, freq[1],  5000, 60, freq[2],
 			2000, 70, freq[3], 10000, 30, freq[4], 10000, 25, freq[5])
 	#fit the data
-	popt, pcov = curve_fit(six_peaks, x, intensity, parguess,sigma=sigma, bounds = [lower, upper])
+	popt, pcov = curve_fit(six_peaks, x, intensity, parguess,sigma=sigma, method = 'trf', bounds = [lower, upper])
 	perr= np.sqrt(np.diag(pcov))
 	#output
 	out = pd.DataFrame()
@@ -302,7 +317,7 @@ def deconvolute(item, save, verbose, bs_line):
 	out['No_baseline'] = intensity
 	out['Baseline'] = baseline
 	#fit result
-	print_result(x, out, item, save, verbose, np.append([slope, intercept],popt), perr)
+	print_result(x, out, item, save, verbose, popt, perr, bs_coef)
 	#plot everything
 	fig_res = plt.figure(figsize=(12,8))
 	ax_r = fig_res.add_subplot(111)
