@@ -121,49 +121,51 @@ class DATA:
 				self.spikes = np.unique(self.spikes)
 
 
+class FIT:
+	def __init__(self, shape, names):
+		super(FIT, self).__init__()
+		self.names = names
+		self.PAH = False
+		if len(self.names)==6:
+			self.PAH = True
+		self.shape = shape
+		self.peaks = pd.DataFrame(columns=['freq',self.names])
+		self.fwm = np.zeros(len(self.peaks))
 
+	def Voigt(self, x, I, x0, s, n):
+		return n*I/(1+((x - x0)**2 /s**2)) + (1-n)*I*exp(-(x-x0)**2/(2*s**2))
+	def gauss(self, x, I, x0, s):
+		return I*exp(-(x-x0)**2/(2*s**2))
+	def lorents(self, x, I, x0, s):
+		return I/ (1+((x - x0)**2 /s**2))
 
+	def Peak(self, x, I, gamma, x0, v, shape):
+		if (shape =='V'): #if gaussian
+			return self.Voigt(x, I, x0, gamma, v)
+		elif (shape =='G'): #if gaussian
+			return self.Voigt(x, I, x0, gamma, 0)
+		elif (shape =='L'): #if lorentzian
+			return self.Voigt(x, I, x0, gamma, 1)
+		else:
+			print("unknown parameter")
+			return 0
 
-def gauss(x, I, x0, s):
-	return I*exp(-(x-x0)**2/(2*s**2))
-def lorents(x, I, x0, s):
-	return I/ (1+((x - x0)**2 /s**2))
+	def model(self, t, *pars):
+		'function of five overlapping peaks'
+		for i, name in enumerate(self.names):
+			self.peaks[name] = self.Peak(t, pars[i], pars[i+1], pars[i+2], pars[i+3], self.shape[0])
+		return np.sum(self.peaks.values[:,1:], axis=1)
 
-def Peak(x, pars):
-	I = pars[0]  # peak height
-	gamma = pars[1]  # ~widht
-	x0 = pars[2]  # centre
-	if (pars[3] =='V'): #if gaussian
-		return Voigt(x, I, x0, gamma, pars[4])
-	elif (pars[3] =='G'): #if gaussian
-		return Voigt(x, I, x0, gamma, 0)
-	elif (pars[3] =='L'): #if lorentzian
-		return Voigt(x, I, x0, gamma, 1)
-	else:
-		print("unknown parameter")
-		return 0
-
-def six_peaks(t, *pars):
-	'function of six overlapping peaks'
-	global six
-	nm=names
-	if not six:
-		nm = names[:-1]
-	if voigt:
-		return np.sum([Peak(t, [pars[4*i], pars[4*i+1], pars[4*i+2], shape[i], pars[4*i+3]]) for i in np.arange(0, len(nm))], axis = 0)
-	else:
-		return np.sum([Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], shape[i]]) for i in np.arange(0, len(nm))], axis = 0)
-
-def FWHM(X,Y):
-	difference = max(Y) - min(Y)
-
-	HM = difference / 2
-
-	pos_extremum = Y.idxmax()  # or in your case: arr_y.argmin()
-
-	nearest_above = (np.abs(Y[pos_extremum:-1] - HM)).idxmin()
-	nearest_below = (np.abs(Y[0:pos_extremum] - HM)).idxmin()
-	return	(np.mean(X[nearest_above ]) - np.mean(X[nearest_below]))
+	def FWHM(self):
+		X = self.peaks['freq']
+		for i, name in enumerate(self.names):
+			Y = self.peaks[name]
+			difference = max(Y) - min(Y)
+			HM = difference / 2
+			pos_extremum = Y.idxmax()  # or in your case: arr_y.argmin()
+			nearest_above = (np.abs(Y[pos_extremum:-1] - HM)).idxmin()
+			nearest_below = (np.abs(Y[0:pos_extremum] - HM)).idxmin()
+			self.fwm[i] = (np.mean(X[nearest_above ]) - np.mean(X[nearest_below]))
 
 
 def plot_peaks(t, axis, bsline, *pars):
