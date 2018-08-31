@@ -6,22 +6,28 @@ import matplotlib
 import peakutils
 import argparse as ap
 import glob
-import os
+import os, sys
+import configparser
 from collections import OrderedDict
 from scipy.optimize import curve_fit
 from scipy import asarray as ar,exp
+from recordtype import recordtype
+
 
 ####################################
-#Parameters
-degree = 3 #polynomial degree for the baseline
+#Structures holding various data
+Limits = recordtype('Limits', ['min', 'max'])
 
-#Enable Voigt fitting
-voigt = False
+DATA = recordtype('DATA', ['X', 'Y', 'no_baseline'])
+
+BASELINE = recordtype('BASELINE', ['X', 'baseline', 'degree', 'coef'])
+baseline = BASELINE(0,0,0,0)
+####################################
 #initial position (PAH, D4, D1, D3, G, D2)
 freq = [1611, 1168, 1353, 1500, 1585, 1280]
 names = ['D2', 'D4', 'D1', 'D3', 'G', 'PAH']
 
-
+'''
 if voigt:
 	#shape of the peaks (PAH, D4, D1, D3, G, D2)
 	#L - lorentzian, G - gaussian, V - voigt
@@ -40,17 +46,7 @@ else:
 	upper = [np.inf, np.inf, 1624, np.inf, np.inf, 1208, np.inf, np.inf, 1358, np.inf,
 		np.inf, 1545, np.inf, np.inf, 1598, np.inf, np.inf, 1300]
 
-
-#data limits
-limit = [650, 2800]
-
-#Region with peaks which will be avoided for the baseline fitting
-peakR =[900, 1800]
-#number of peaks: True=six, False=five
-six = False
-####################################
-#Spike detection routine
-spike_detect = False
+'''
 ###################################
 font = {'family': 'serif',
 		'color':  'darkred',
@@ -73,8 +69,49 @@ ln_style = list(linestyles.items())
 answ = ['n', 'N']
 thrsh = 0.08
 
-def Voigt(x, I, x0, s, n):
-	return n*I/(1+((x - x0)**2 /s**2)) + (1-n)*I*exp(-(x-x0)**2/(2*s**2))
+class DATA:
+	def __init__(self):
+		super(DATA, self).__init__()
+		self.X = 0
+		self.Y = 0
+		self.baseline = 0
+		self.noBaseline =0
+		self.bsDegree = 0
+		self.bsCoef = 0
+
+	def loadData(self, path):
+		try:
+			dt = np.loadtxt(path, skiprows =10)
+		except OSErro:
+			print("File not found")
+			return
+		self.X = dt[:,0]
+		self.Y = dt[:,1]
+
+	def setLimits(self, limits):
+		if self.X[0]>limits.min:
+			limits.min=self.X[0]
+		if self.X[-1]<limits.max:
+			limits.max=self.X[-1]
+		low = np.argwhere(self.X>limits.min)[0][0]
+		high = np.argwhere(self.X<limits.max)[-1][0]
+		self.X = self.X[low:high]
+		self.Y = self.Y[low:high]
+
+	def fitBaseline(self, degree, limits):
+		#Select the part without peaks and fit a polynomial function
+		baselineX = np.append(self.X[:np.argwhere(self.X>limits.min)[0][0]],
+			self.X[np.argwhere(self.X>limits.max)[0][0]:])
+		baselineY = np.append(self.Y[:np.argwhere(self.X>limits.min)[0][0]],
+			self.Y[np.argwhere(self.X>limits.max)[0][0]:])
+		self.bsDegree = degree
+		self.bsCoef = np.polyfit(baselineX,baselineY, self.bsDegree)
+		fit = np.poly1d(self.bsCoef)
+		self.baseline = fit(self.X)
+
+
+
+
 def gauss(x, I, x0, s):
 	return I*exp(-(x-x0)**2/(2*s**2))
 def lorents(x, I, x0, s):
@@ -192,6 +229,32 @@ def plot_baseline(x, y,baseline, spikes):
 		plt.grid()
 		plt.show(block=False)
 		return fig
+def readConf():
+	global degree, voigt, six, spike_detect, dataLimits, peakLimits, parameters
+	config = configparser.ConfigParser()
+	if len(config.read('config/config.ini')):
+		degree = int(config['DEFAULT']['degree'])
+		font_size = int(config['DEFAULT']['font_size'])
+		voigt = bool(int(config['DEFAULT']['voigt']))
+		spike_detect = bool(int(config['DEFAULT']['sp_detect']))
+		six = bool(int(config['DEFAULT']['six']))
+		dataLimits = Limits(int(config['LIMITS']['low']), int(config['LIMITS']['high']))
+		peakLimits = Limits(int(config['PEAK']['low']), int(config['PEAK']['high']))
+	else:
+		print('Could not find the config file...\nLoading defaults')
+		degree = 3
+		font_size = 18
+		voigt = False
+		spike_detect = False
+		six = False
+		dataLimits = Limits(650, 2800)
+		peakLimits = Limits(900, 1800)
+	matplotlib.rcParams.update({'font.size': font_size})
+	try:
+		parameters = pd.read_csv('config/initialData.csv')
+	except FileNotFoundError:
+		print('Initial parameters were not loaded\nFile not found\nexiting....')
+		os._exit(0)
 
 def deconvolute(item, save, verbose, bs_line):
 	global six, thrsh, degree
@@ -351,13 +414,29 @@ if __name__ == '__main__':
 	print("#########################################################")
 	print("............Deconvolution of RAMAN spectra...............")
 	print("#########################################################\n")
+	readConf()
+	'''
 	parser = ap.ArgumentParser(description='Deconvolution of Raman spectra')
-	parser.add_argument('-s','--save', action='store_true', help='Saves the result of the fit (image and report sheet)')
-	parser.add_argument('-p','--path', action='store_true', help='processes all the files in the directory')
-	parser.add_argument('-f','--filter', action='store_true', help='Detects and removes spikes')
+	parser.add_argument('-s','--save',
+		action='store_true', help='Saves the result of the fit (image and report sheet)')
+	parser.add_argument('-p','--path',
+		action='store_true', help='processes all the files in the directory')
+	parser.add_argument('-f','--filter',
+		action='store_true', help='Detects and removes spikes')
 	parser.add_argument('name', help='File name')
 	args = parser.parse_args()
-	matplotlib.rcParams.update({'font.size': 18})
+	'''
+	data = DATA()
+	data.loadData(sys.argv[1])
+	plt.plot(data.X, data.Y)
+	data.setLimits(dataLimits)
+	data.fitBaseline(degree, peakLimits)
+	plt.plot(data.X, data.baseline, 'r--')
+	print(data.bsCoef)
+
+	plt.show()
+
+	'''
 	spike_detect= args.filter
 	if (args.path):
 		if spike_detect:
@@ -372,6 +451,7 @@ if __name__ == '__main__':
 			plt.tight_layout()
 			plt.show()
 	os._exit(0)
+	'''
 
 
 
