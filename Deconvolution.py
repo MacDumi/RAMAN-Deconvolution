@@ -78,6 +78,7 @@ class DATA:
 		self.noBaseline =0
 		self.bsDegree = 0
 		self.bsCoef = 0
+		self.spikes=[]
 
 	def loadData(self, path):
 		try:
@@ -115,7 +116,7 @@ class DATA:
 		for i in np.arange(0, len(self.Y)-2):
 			previous = np.mean([self.Y[i], self.Y[i+1]])
 			current = np.mean([self.Y[i+1], self.Y[i+2]])
-			if abs(previous-current)/current>threshold
+			if abs(previous-current)/current>threshold:
 				self.spikes= np.append(self.spikes, [i, i+1, i+2]).astype(int)
 				self.spikes = np.unique(self.spikes)
 
@@ -214,16 +215,15 @@ def print_result(t, out, item, save, verbose, pars, perr, bs_coef):
 		output.close()
 		out.to_csv(item[:-4]+"/data.csv", index=None)
 
-def plot_baseline(x, y,baseline, spikes):
-		plt.close()
+def plotBaseline(data):
 		fig = plt.figure(figsize=(12,8))
 		ax = fig.add_subplot(111)
-		ax.plot(x, y, label = 'Experimental data')
-		if len(spikes):
-			ax.plot(x[spikes], y[spikes], 'ro', label='Spikes')
-		ax.plot(x, baseline, 'r--', label = 'Baseline')
-		plt.ylabel("Intensity")
-		plt.xlabel("Raman shift, $cm^{-1}$")
+		ax.plot(data.X, data.Y, label = 'Experimental data')
+		if len(data.spikes):
+			ax.plot(data.X[data.spikes], data.Y[data.spikes], 'ro', label='Spikes')
+		ax.plot(data.X, data.baseline, 'r--', label = 'Baseline')
+		ax.set_ylabel("Intensity")
+		ax.set_xlabel("Raman shift, $cm^{-1}$")
 		plt.legend()
 		plt.grid()
 		plt.show(block=False)
@@ -427,14 +427,9 @@ if __name__ == '__main__':
 	'''
 	data = DATA()
 	data.loadData(sys.argv[1])
-	plt.plot(data.X, data.Y)
 	data.setLimits(dataLimits)
 	data.fitBaseline(degree, peakLimits)
-	plt.plot(data.X, data.baseline, 'r--')
-	print(data.bsCoef)
-
-	plt.show()
-
+	fig = plotBaseline(data)
 	'''
 	spike_detect= args.filter
 	if (args.path):
