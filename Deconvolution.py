@@ -40,13 +40,14 @@ if voigt:
 
 else:
 	shape = ['L', 'L', 'L', 'G', 'L', 'L']
+'''
 		#bounds
-	lower = [10, 10, 1599,	10, 10, 1127, 10, 10, 1343, 10, 10, 1489, 10, 10, 1571,
+lower = [10, 10, 1599, 10, 10, 1127, 10, 10, 1343, 10, 10, 1489, 10, 10, 1571,
 		10, 10, 1230]
-	upper = [np.inf, np.inf, 1624, np.inf, np.inf, 1208, np.inf, np.inf, 1358, np.inf,
+upper = [np.inf, np.inf, 1624, np.inf, np.inf, 1208, np.inf, np.inf, 1358,np.inf,
 		np.inf, 1545, np.inf, np.inf, 1598, np.inf, np.inf, 1300]
 
-'''
+
 ###################################
 font = {'family': 'serif',
 		'color':  'darkred',
@@ -129,7 +130,7 @@ class FIT:
 		if len(self.names)==6:
 			self.PAH = True
 		self.shape = shape
-		self.peaks = pd.DataFrame(columns=['freq',self.names])
+		self.peaks = pd.DataFrame()
 		self.fwm = np.zeros(len(self.peaks))
 
 	def Voigt(self, x, I, x0, s, n):
@@ -139,13 +140,18 @@ class FIT:
 	def lorents(self, x, I, x0, s):
 		return I/ (1+((x - x0)**2 /s**2))
 
-	def Peak(self, x, I, gamma, x0, v, shape):
+	def Peak(self, x, pars):
+		I = pars[0]
+		gamma = pars[1]
+		x0 = pars[2]
+		v =1
+		shape =pars[3]
 		if (shape =='V'): #if gaussian
 			return self.Voigt(x, I, x0, gamma, v)
 		elif (shape =='G'): #if gaussian
-			return self.Voigt(x, I, x0, gamma, 0)
+			return self.gauss(x, I, x0, gamma)
 		elif (shape =='L'): #if lorentzian
-			return self.Voigt(x, I, x0, gamma, 1)
+			return self.lorents(x, I, x0, gamma)
 		else:
 			print("unknown parameter")
 			return 0
@@ -153,7 +159,7 @@ class FIT:
 	def model(self, t, *pars):
 		'function of five overlapping peaks'
 		for i, name in enumerate(self.names):
-			self.peaks[name] = self.Peak(t, pars[i], pars[i+1], pars[i+2], pars[i+3], self.shape[0])
+			self.peaks[name] = self.Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2],  self.shape[i]])
 		return np.sum(self.peaks.values[:,1:], axis=1)
 
 	def FWHM(self):
@@ -167,9 +173,20 @@ class FIT:
 			nearest_below = (np.abs(Y[0:pos_extremum] - HM)).idxmin()
 			self.fwm[i] = (np.mean(X[nearest_above ]) - np.mean(X[nearest_below]))
 
+	def deconvolute(self, data, parguess, bounds):
+		'''
+		sigma =np.ones(len(data.X))*2
+		sigma[np.abs(data.X-1450)<50]=0.8
+		sigma[np.abs(data.X-900)<100]=0.8
+		sigma[np.abs(data.X-1800)<100]=0.7
+		'''
+		popt, pcov = curve_fit(self.model, data.X, data.noBaseline,  parguess, bounds = bounds)
+		perr= np.sqrt(np.diag(pcov))
+		print(popt)
 
+'''
 def plot_peaks(t, axis, bsline, *pars):
-	'plot six overlapping peaks (PAH, D4, D1, D3, G, D2)'
+	#plot six overlapping peaks (PAH, D4, D1, D3, G, D2)
 	global six
 	nm=names
 	if not six:
@@ -216,7 +233,7 @@ def print_result(t, out, item, save, verbose, pars, perr, bs_coef):
 		output.writelines(text)
 		output.close()
 		out.to_csv(item[:-4]+"/data.csv", index=None)
-
+'''
 def plotBaseline(data):
 		fig = plt.figure(figsize=(12,8))
 		ax = fig.add_subplot(111)
@@ -228,7 +245,7 @@ def plotBaseline(data):
 		ax.set_xlabel("Raman shift, $cm^{-1}$")
 		plt.legend()
 		plt.grid()
-		plt.show(block=False)
+		plt.show()
 		return fig
 def readConf():
 	global degree, voigt, six, spike_detect, dataLimits, peakLimits, parameters
@@ -256,7 +273,7 @@ def readConf():
 	except FileNotFoundError:
 		print('Initial parameters were not loaded\nFile not found\nexiting....')
 		os._exit(0)
-
+'''
 def deconvolute(item, save, verbose, bs_line):
 	global six, thrsh, degree
 	menu_flag = False
@@ -410,7 +427,7 @@ def deconvolute(item, save, verbose, bs_line):
 		fig_res_bsl.savefig(item[:-4]+'/fit+baseline.png')
 		baseLN.savefig(item[:-4]+'/baseline.png')
 
-
+'''
 if __name__ == '__main__':
 	print("#########################################################")
 	print("............Deconvolution of RAMAN spectra...............")
@@ -431,7 +448,14 @@ if __name__ == '__main__':
 	data.loadData(sys.argv[1])
 	data.setLimits(dataLimits)
 	data.fitBaseline(degree, peakLimits)
-	fig = plotBaseline(data)
+	data.noBaseline=data.Y
+	#fig = plotBaseline(data)
+	fit = FIT(parameters['shape'][:-1], parameters['labels'][:-1])
+	parguess = [5000, 25, freq[0], 10000, 50, freq[1],  5000, 60, freq[2],
+			2000, 70, freq[3], 10000, 30, freq[4], 10000, 25, freq[5]]
+	bounds = [lower, upper]
+	fit.deconvolute(data, parguess, bounds)
+	plt.show()
 	'''
 	spike_detect= args.filter
 	if (args.path):
