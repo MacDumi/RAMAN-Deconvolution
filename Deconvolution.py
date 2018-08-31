@@ -84,7 +84,7 @@ class DATA:
 	def loadData(self, path):
 		try:
 			dt = np.loadtxt(path, skiprows =10)
-		except OSErro:
+		except OSError:
 			print("File not found")
 			return
 		self.X = dt[:,0]
@@ -158,9 +158,10 @@ class FIT:
 
 	def model(self, t, *pars):
 		'function of five overlapping peaks'
-		for i, name in enumerate(self.names):
-			self.peaks[name] = self.Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2],  self.shape[i]])
-		return np.sum(self.peaks.values[:,1:], axis=1)
+		temp= np.zeros(len(t))
+		for i in np.arange(0, len(self.names)):
+			temp = np.sum([temp,self.Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2],  self.shape[i]])], axis=0)
+		return temp
 
 	def FWHM(self):
 		X = self.peaks['freq']
