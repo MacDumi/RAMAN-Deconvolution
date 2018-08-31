@@ -158,10 +158,7 @@ class FIT:
 
 	def model(self, t, *pars):
 		'function of five overlapping peaks'
-		temp= np.zeros(len(t))
-		for i in np.arange(0, len(self.names)):
-			temp = np.sum([temp,self.Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2],  self.shape[i]])], axis=0)
-		return temp
+		return np.sum([self.Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], self.shape[i]]) for i in np.arange(0, len(self.names))], axis=0)
 
 	def FWHM(self):
 		X = self.peaks['freq']
@@ -183,7 +180,7 @@ class FIT:
 		'''
 		popt, pcov = curve_fit(self.model, data.X, data.noBaseline,  parguess, bounds = bounds)
 		perr= np.sqrt(np.diag(pcov))
-		print(popt)
+		return popt
 
 '''
 def plot_peaks(t, axis, bsline, *pars):
@@ -450,12 +447,14 @@ if __name__ == '__main__':
 	data.setLimits(dataLimits)
 	data.fitBaseline(degree, peakLimits)
 	data.noBaseline=data.Y
-	#fig = plotBaseline(data)
+	fig = plotBaseline(data)
 	fit = FIT(parameters['shape'][:-1], parameters['labels'][:-1])
-	parguess = [5000, 25, freq[0], 10000, 50, freq[1],  5000, 60, freq[2],
-			2000, 70, freq[3], 10000, 30, freq[4], 10000, 25, freq[5]]
+	parguess =np.concatenate( [[parameters['intens'][i], parameters['width'][i], parameters['freq'][i]] for i in np.arange(0, len(parameters['labels']))])
+	lower = np.concatenate( [[parameters['intens_min'][i], parameters['width_min'][i], parameters['freq_min'][i]] for i in np.arange(0, len(parameters['labels']))])
+	upper = np.concatenate( [[parameters['intens_max'][i], parameters['width_max'][i], parameters['freq_max'][i]] for i in np.arange(0, len(parameters['labels']))])
 	bounds = [lower, upper]
-	fit.deconvolute(data, parguess, bounds)
+	pars = fit.deconvolute(data, parguess, bounds)
+	plt.plot(data.X, fit.model(data.X, *pars), 'r--')
 	plt.show()
 	'''
 	spike_detect= args.filter
