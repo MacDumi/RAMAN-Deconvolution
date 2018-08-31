@@ -109,6 +109,17 @@ class DATA:
 		fit = np.poly1d(self.bsCoef)
 		self.baseline = fit(self.X)
 
+	def detect_spikes(self, threshold):
+		#detect spikes
+		self.spikes=[]
+		for i in np.arange(0, len(self.Y)-2):
+			previous = np.mean([self.Y[i], self.Y[i+1]])
+			current = np.mean([self.Y[i+1], self.Y[i+2]])
+			if abs(previous-current)/current>threshold
+				self.spikes= np.append(self.spikes, [i, i+1, i+2]).astype(int)
+				self.spikes = np.unique(self.spikes)
+
+
 
 
 
@@ -202,18 +213,6 @@ def print_result(t, out, item, save, verbose, pars, perr, bs_coef):
 		output.writelines(text)
 		output.close()
 		out.to_csv(item[:-4]+"/data.csv", index=None)
-
-def detect_spikes(y):
-	#detect spikes
-	spikes=[]
-	for i in np.arange(0, len(y)-2):
-		previous = np.mean([y[i], y[i+1]])
-		current = np.mean([y[i+1], y[i+2]])
-		if abs(previous-current)/current>thrsh:
-			spikes= np.append([int(i+2), int(i+1), int(i)], spikes)
-			spikes = np.unique(spikes)
-	spikes = spikes[::-1]
-	return [int(spk) for spk in spikes]
 
 def plot_baseline(x, y,baseline, spikes):
 		plt.close()

@@ -1,0 +1,7 @@
+freq,freq_min,freq_max,intens_min,intens_max,intens,width,width_min,width_max,shape,labels,voigt,voigt_min,voigt_max
+1611,1599,1624,10,inf,5000,25,10,inf,L,D2,0.5,0,1
+1168,1127,1208,10,inf,10000,52,10,inf,L,D4,0.5,0,1
+1353,1343,1358,10,inf,5000,60,10,inf,L,D1,0.5,0,1
+1500,1489,1545,10,inf,2000,70,10,inf,G,D3,0.5,0,1
+1585,1571,1598,10,inf,10000,30,10,inf,L,G,0.5,0,1
+1280,1230,1300,10,inf,10000,25,10,inf,L,PAH,0.5,0,1
