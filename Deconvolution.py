@@ -111,7 +111,22 @@ class DATA:
 		fit = np.poly1d(self.bsCoef)
 		self.baseline = fit(self.X)
 
-	def detect_spikes(self, threshold):
+	def plotBaseline(self):
+		fig = plt.figure(figsize=(12,8))
+		ax = fig.add_subplot(111)
+		ax.plot(self.X, self.Y, label = 'Experimental data')
+		if len(self.spikes):
+			ax.plot(self.X[self.spikes], self.Y[self.spikes], 'ro', label='Spikes')
+		ax.plot(self.X, self.baseline, 'r--', label = 'Baseline')
+		ax.set_ylabel("Intensity")
+		ax.set_xlabel("Raman shift, $cm^{-1}$")
+		plt.legend()
+		plt.grid()
+		plt.tight_layout()
+		plt.show(block=False)
+		
+		
+	def detectSpikes(self, threshold):
 		#detect spikes
 		self.spikes=[]
 		for i in np.arange(0, len(self.Y)-2):
@@ -121,17 +136,21 @@ class DATA:
 				self.spikes= np.append(self.spikes, [i, i+1, i+2]).astype(int)
 				self.spikes = np.unique(self.spikes)
 
+	def removeSpikes(self):
+		#remove spikes
+		print("Removing the spikes")
+		for idx in self.spikes:
+			self.Y = np.delete(self.Y, idx)
+			self.X = np.delete(self.X, idx)
 
 class FIT:
 	def __init__(self, shape, names):
 		super(FIT, self).__init__()
 		self.names = names
-		self.PAH = False
-		if len(self.names)==6:
-			self.PAH = True
 		self.shape = shape
+		self.args = [4 if self.shape[i]=='V' else 3 for i in np.arange(0, len(self.shape))]
 		self.peaks = pd.DataFrame()
-		self.fwm = np.zeros(len(self.peaks))
+		self.fwhm = np.zeros(len(self.names))
 
 	def Voigt(self, x, I, x0, s, n):
 		return n*I/(1+((x - x0)**2 /s**2)) + (1-n)*I*exp(-(x-x0)**2/(2*s**2))
@@ -140,13 +159,15 @@ class FIT:
 	def lorents(self, x, I, x0, s):
 		return I/ (1+((x - x0)**2 /s**2))
 
-	def Peak(self, x, pars):
+	def Peak(self, x, *pars, **kwargs):
 		I = pars[0]
 		gamma = pars[1]
 		x0 = pars[2]
-		v =1
-		shape =pars[3]
+		v =0
+		shape =kwargs['shape']
 		if (shape =='V'): #if gaussian
+			if len(pars)==4:
+				v =pars[3]
 			return self.Voigt(x, I, x0, gamma, v)
 		elif (shape =='G'): #if gaussian
 			return self.gauss(x, I, x0, gamma)
@@ -158,7 +179,11 @@ class FIT:
 
 	def model(self, t, *pars):
 		'function of five overlapping peaks'
-		return np.sum([self.Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], self.shape[i]]) for i in np.arange(0, len(self.names))], axis=0)
+		temp =np.zeros(len(t))
+		for i in np.arange(0, len(self.names)):
+			indx = int(np.sum(self.args[:i]))
+			temp = np.sum((temp, self.Peak(t,  *pars[indx:indx+self.args[i]], shape=self.shape[i])), axis=0)
+		return temp
 
 	def FWHM(self):
 		X = self.peaks['freq']
@@ -169,82 +194,80 @@ class FIT:
 			pos_extremum = Y.idxmax()  # or in your case: arr_y.argmin()
 			nearest_above = (np.abs(Y[pos_extremum:-1] - HM)).idxmin()
 			nearest_below = (np.abs(Y[0:pos_extremum] - HM)).idxmin()
-			self.fwm[i] = (np.mean(X[nearest_above ]) - np.mean(X[nearest_below]))
+			self.fwhm[i] = (np.mean(X[nearest_above ]) - np.mean(X[nearest_below]))
 
+	def area(self):
+		self.area=[]
+		for name in self.names:
+			self.area = np.append(self.area ,np.trapz(self.peaks[name], x = self.peaks['freq']))
+			
+			
 	def deconvolute(self, data, parguess, bounds):
-		'''
+		
+		self.peaks['freq']=data.X
+		self.peaks['exp'] = data.noBaseline
 		sigma =np.ones(len(data.X))*2
 		sigma[np.abs(data.X-1450)<50]=0.8
 		sigma[np.abs(data.X-900)<100]=0.8
 		sigma[np.abs(data.X-1800)<100]=0.7
-		'''
-		popt, pcov = curve_fit(self.model, data.X, data.noBaseline,  parguess, bounds = bounds)
-		perr= np.sqrt(np.diag(pcov))
-		return popt
+		
+		self.pars, pcov = curve_fit(self.model, data.X, data.noBaseline,  parguess, bounds = bounds)
+		self.perr= np.sqrt(np.diag(pcov))
+		
+		for i, name in enumerate(self.names):
+			indx = int(np.sum(self.args[:i]))
+			self.peaks[name] = self.Peak(data.X, *self.pars[indx:indx+self.args[i]], shape =self.shape[i])
+		self.peaks['cumulative']=self.model(data.X, *self.pars)
+		self.FWHM()
+		self.area()
+		self.printResult(data, saveName='result.txt')
 
-'''
-def plot_peaks(t, axis, bsline, *pars):
-	#plot six overlapping peaks (PAH, D4, D1, D3, G, D2)
-	global six
-	nm=names
-	if not six:
-		nm = names[:-1]
-	for i in np.arange(0, len(nm)):
-		if voigt:
-			axis.plot(t, Peak(t, [pars[4*i], pars[4*i+1], pars[4*i+2], shape[i], pars[4*i+3]]) +bsline, linewidth = 2,linestyle = ln_style[i][1], label =nm[i])
-		else:
-			axis.plot(t, Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], shape[i]]) +bsline, linewidth = 2,linestyle = ln_style[i][1], label =nm[i])
-
-def print_result(t, out, item, save, verbose, pars, perr, bs_coef):
-	degree = len(bs_coef)-1
-	text = "****************BASELINE*******************\nDegree: %d\nCoefficients (starting with the fighest power):\n"%degree
-	text = text + str(bs_coef)
-	nm=names
-	area =[]
-	intensity = []
-	text = text +"\n****************FIT RESULTS****************\n"
-	if not six:
-		nm = names[:-1]
-	for i in np.arange(0, len(nm)):
-		if voigt:
-			out[nm[i]] = Peak(t, [pars[4*i], pars[4*i+1], pars[4*i+2], shape[i], pars[4*i+5]])
-			fwhm = FWHM(t, out[nm[i]])
-			text = text +"Peak %s:\n	Centre: %.4f +/- %.4f cm-1\n	Amplitude: %.4f +/- %.4f\n	gamma: %.4f +/- %.4f\n	FWHM: %.4f\n" %(names[i], pars[4*i+2], perr[4*i+2], pars[4*i], perr[4*i], pars[4*i+1], perr[4*i+1], fwhm)
-			area = np.append(area ,np.trapz(Peak(t, [pars[4*i], pars[4*i+1], pars[4*i+2], shape[i], pars[4*i+3]]), x = t))
-			text = text +"	L/G ratio = %.4f\n" %pars[4*i+3]
-			intensity = np.append(intensity, pars[4*i])
-		else:
-			out[nm[i]] = Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], shape[i]])
-			fwhm = FWHM(t, out[nm[i]])
-			text = text +"Peak %s:\n	Centre: %.4f +/- %.4f cm-1\n	Amplitude: %.4f +/- %.4f\n	gamma: %.4f +/- %.4f\n	FWHM: %.4f\n" %(names[i], pars[3*i+2], perr[3*i+2], pars[3*i], perr[3*i], pars[3*i+1], perr[3*i+1], fwhm)
-			area = np.append(area ,np.trapz(Peak(t, [pars[3*i], pars[3*i+1], pars[3*i+2], shape[i]]), x = t))
-			intensity = np.append(intensity, pars[3*i])
-		text = text +"	Area = %.4f\n" %area[i]
-	out['Cumulative'] = np.sum(out.values[:,3:], axis=1)
-	text = text +"\n**************Ratio - Amplitude************\n	D1/G= %.4f\n	D1/(G+D1+D2)= %.4f\n	D4/G= %.4f\n" %(intensity[2]/intensity[4], intensity[2]/(intensity[4]+intensity[0]+intensity[2]), intensity[1]/intensity[4])
-	text = text +"\n**************Ratio - Areas****************\n	D1/G= %.4f\n	D1/(G+D1+D2)= %.4f\n	D4/G= %.4f\n" %(area[2]/area[4], area[2]/(area[4]+area[0]+area[2]), area[1]/area[4])
-
-	if verbose:
-		print(text)
-	if save:
-		output = open(item[:-4]+"/fit_result.txt", "w")
-		output.writelines(text)
-		output.close()
-		out.to_csv(item[:-4]+"/data.csv", index=None)
-'''
-def plotBaseline(data):
+	def plot(self, *args):
+		#plot six overlapping peaks (PAH, D4, D1, D3, G, D2)
+		baseline = np.zeros(len(self.peaks['freq']))
+		if len(args)==1:
+			baseline = args[0]
 		fig = plt.figure(figsize=(12,8))
 		ax = fig.add_subplot(111)
-		ax.plot(data.X, data.Y, label = 'Experimental data')
-		if len(data.spikes):
-			ax.plot(data.X[data.spikes], data.Y[data.spikes], 'ro', label='Spikes')
-		ax.plot(data.X, data.baseline, 'r--', label = 'Baseline')
+		ax.plot(self.peaks['freq'], self.peaks['exp']+baseline,'o',markersize=3, color = '#1E68FF',label='Experimental data')
+		ax.plot(self.peaks['freq'], self.peaks['cumulative']+baseline, 'r-',linewidth = 1, label='Cumulative')
+		for i, name in enumerate(self.names):
+			ax.plot(self.peaks['freq'], self.peaks[name]+baseline, linewidth = 2,linestyle = ln_style[i][1], label =name)
 		ax.set_ylabel("Intensity")
 		ax.set_xlabel("Raman shift, $cm^{-1}$")
-		plt.legend()
-		plt.grid()
-		plt.show()
-		return fig
+		ax.legend()
+		ax.grid()
+		plt.tight_layout()
+		
+	def printResult(self, data, **kwargs):
+
+		text = "****************BASELINE*******************\nDegree: %d\nCoefficients (starting with the highest power):\n"%data.bsDegree
+		text = text + str(data.bsCoef)
+		text = text +"\n****************FIT RESULTS****************\n"
+		self.intensity = []
+		for i, name in enumerate(self.names):
+			indx = int(np.sum(self.args[:i]))
+			params = self.pars[indx:indx+self.args[i]]
+			errs = self.perr[indx:indx+self.args[i]]
+			text = text +"Peak %s:\n	Centre: %.4f +/- %.4f cm-1\n	Amplitude: %.4f +/- %.4f\n	gamma: %.4f +/- %.4f\n	FWHM: %.4f\n" %(name, 
+				params[2], errs[2], params[0], errs[0], params[1], errs[1], self.fwhm[i])
+			if self.shape[i]=='V':
+				text = text +"	L/G ratio = %.4f\n" %params[3]
+			self.intensity = np.append(self.intensity, params[0])
+			text = text +"	Area = %.4f\n" %self.area[i]
+		text = text +"\n**************Ratio - Amplitude************\n	D1/G= %.4f\n	D1/(G+D1+D2)= %.4f\n	D4/G= %.4f\n" %(self.intensity[2]/self.intensity[4], 
+			self.intensity[2]/(self.intensity[4]+self.intensity[0]+self.intensity[2]), self.intensity[1]/self.intensity[4])
+		text = text +"\n**************Ratio - Areas****************\n	D1/G= %.4f\n	D1/(G+D1+D2)= %.4f\n	D4/G= %.4f\n" %(self.area[2]/self.area[4], 
+			self.area[2]/(self.area[4]+self.area[0]+self.area[2]), self.area[1]/self.area[4])
+		print(text)
+		if 'saveName' in kwargs:
+			output = open(kwargs.get('saveName'), "w")
+			output.writelines(text)
+			output.close()
+
+
+
+
 def readConf():
 	global degree, voigt, six, spike_detect, dataLimits, peakLimits, parameters
 	config = configparser.ConfigParser()
@@ -271,6 +294,8 @@ def readConf():
 	except FileNotFoundError:
 		print('Initial parameters were not loaded\nFile not found\nexiting....')
 		os._exit(0)
+
+
 '''
 def deconvolute(item, save, verbose, bs_line):
 	global six, thrsh, degree
@@ -294,11 +319,7 @@ def deconvolute(item, save, verbose, bs_line):
 	#TO DO: IMPORVE THIS PART, MAKE IT MORE EFFICIENT
 	data =data[low:high,:]
 
-	#Select the part without peaks and fit a polynomial function
-	data_BSL = np.vstack((data[:np.argwhere(x>peakR[0])[0][0],:],data[np.argwhere(x>peakR[1])[0][0]:,:]))
-	bs_coef = np.polyfit(data_BSL[:,0],data_BSL[:,1],degree)
-	fit = np.poly1d(bs_coef)
-	baseline = fit(x)
+	
 
 	#baseline = peakutils.baseline(y, degree) #baseline
 	if degree ==1:
@@ -373,53 +394,8 @@ def deconvolute(item, save, verbose, bs_line):
 		six=True
 		print("Fitting with the PAH band")
 
-	#weight for fitting....note:lower sigma->higher weight
-	sigma =np.ones(len(x))*2
-	sigma[np.abs(x-1450)<50]=0.8
-	sigma[np.abs(x-900)<100]=0.8
-	sigma[np.abs(x-1800)<100]=0.7
 
-	if voigt:
-		#initial guess
-		parguess = (5000, 25, freq[0], 0.5, 10000, 50, freq[1], 0.5, 5000, 60, freq[2], 0.5,
-			2000, 70, freq[3], 0.5, 10000, 30, freq[4], 0.5, 10000, 25, freq[5], 0.5)
-	else:
-		parguess = (5000, 25, freq[0],	10000, 50, freq[1],  5000, 60, freq[2],
-			2000, 70, freq[3], 10000, 30, freq[4], 10000, 25, freq[5])
-	#fit the data
-	popt, pcov = curve_fit(six_peaks, x, intensity, parguess,sigma=sigma, method = 'trf', bounds = [lower, upper])
-	perr= np.sqrt(np.diag(pcov))
-	#output
-	out = pd.DataFrame()
-	out['Raman shift'] = x
-	out['Raw data'] = intensity+baseline
-	out['No_baseline'] = intensity
-	out['Baseline'] = baseline
-	#fit result
-	print_result(x, out, item, save, verbose, popt, perr, bs_coef)
-	#plot everything
-	fig_res = plt.figure(figsize=(12,8))
-	ax_r = fig_res.add_subplot(111)
-	ax_r.plot(x, six_peaks(x, *popt), 'r-',linewidth = 1, label='Cumulative')
-	plot_peaks(x, ax_r, np.zeros(len(baseline)), *popt);
-	ax_r.plot(x, intensity,'o',markersize=3, color = '#1E68FF',label='Experimental data')
-	ax_r.set_ylabel("Intensity")
-	ax_r.set_xlabel("Raman shift, $cm^{-1}$")
-	ax_r.legend()
-	ax_r.grid()
-	plt.tight_layout()
 
-	#plot results with the baseline
-	fig_res_bsl = plt.figure(figsize=(12,8))
-	ax_r_b = fig_res_bsl.add_subplot(111)
-	ax_r_b.plot(x, six_peaks(x, *popt)+baseline, 'r-', linewidth = 1,label='Cumulative')
-	plot_peaks(x,ax_r_b, baseline, *popt);
-	ax_r_b.plot(x, y,'o',markersize=3, color = '#1E68FF', label='Experimental data')
-	ax_r_b.set_ylabel("Intensity")
-	ax_r_b.set_xlabel("Raman shift, $cm^{-1}$")
-	ax_r_b.legend()
-	ax_r_b.grid()
-	plt.tight_layout()
 	if(save):
 		fig_res.savefig(item[:-4]+'/fit.png')
 		fig_res_bsl.savefig(item[:-4]+'/fit+baseline.png')
@@ -447,15 +423,35 @@ if __name__ == '__main__':
 	data.setLimits(dataLimits)
 	data.fitBaseline(degree, peakLimits)
 	data.noBaseline=data.Y
-	fig = plotBaseline(data)
-	fit = FIT(parameters['shape'][:-1], parameters['labels'][:-1])
-	parguess =np.concatenate( [[parameters['intens'][i], parameters['width'][i], parameters['freq'][i]] for i in np.arange(0, len(parameters['labels']))])
-	lower = np.concatenate( [[parameters['intens_min'][i], parameters['width_min'][i], parameters['freq_min'][i]] for i in np.arange(0, len(parameters['labels']))])
-	upper = np.concatenate( [[parameters['intens_max'][i], parameters['width_max'][i], parameters['freq_max'][i]] for i in np.arange(0, len(parameters['labels']))])
+	data.plotBaseline()
+	names = parameters['labels'][:5]
+	shape = parameters['shape'][:5]
+	fit = FIT(shape, names)
+	parguess =np.concatenate( [[parameters['intens'][i], parameters['width'][i], 
+			parameters['freq'][i], parameters['voigt'][i]] if shape[i]=='V' else 
+			[parameters['intens'][i], parameters['width'][i], parameters['freq'][i]] 
+			for i in np.arange(0, len(names))])
+	lower = np.concatenate( [[parameters['intens_min'][i], parameters['width_min'][i],
+			parameters['freq_min'][i], parameters['voigt_min'][i]] if shape[i]=='V' else 
+			[parameters['intens_min'][i], parameters['width_min'][i], parameters['freq_min'][i]] 
+			for i in np.arange(0, len(names))])
+	upper = np.concatenate( [[parameters['intens_max'][i], parameters['width_max'][i], 
+			parameters['freq_max'][i], parameters['voigt_max'][i]] if shape[i]=='V' else 
+			[parameters['intens_max'][i], parameters['width_max'][i], parameters['freq_max'][i]] 
+			for i in np.arange(0, len(names))])
 	bounds = [lower, upper]
-	pars = fit.deconvolute(data, parguess, bounds)
-	plt.plot(data.X, fit.model(data.X, *pars), 'r--')
+	#plt.plot(data.X, fit.model(data.X, *parguess))
+	fit.deconvolute(data, parguess, bounds)
+	#fit.plot(data.X)
+	fit.plot()
 	plt.show()
+	
+	out = pd.DataFrame()
+	out['Raman shift'] = data.X
+	out['Raw data'] = data.Y
+	out['Baseline'] = data.baseline
+	out['Intensity'] = data.noBaseline
+	out = pd.concat([out, fit.peaks[np.append(names, 'cumulative')]], axis=1, sort=False)
 	'''
 	spike_detect= args.filter
 	if (args.path):
