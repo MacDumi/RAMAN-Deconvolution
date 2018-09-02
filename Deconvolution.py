@@ -18,7 +18,6 @@ from recordtype import recordtype
 #Structures holding various data
 Limits = recordtype('Limits', ['min', 'max'])
 
-DATA = recordtype('DATA', ['X', 'Y', 'no_baseline'])
 
 BASELINE = recordtype('BASELINE', ['X', 'baseline', 'degree', 'coef'])
 baseline = BASELINE(0,0,0,0)
@@ -27,27 +26,9 @@ baseline = BASELINE(0,0,0,0)
 freq = [1611, 1168, 1353, 1500, 1585, 1280]
 names = ['D2', 'D4', 'D1', 'D3', 'G', 'PAH']
 
-'''
-if voigt:
-	#shape of the peaks (PAH, D4, D1, D3, G, D2)
-	#L - lorentzian, G - gaussian, V - voigt
-	shape = ['V', 'V', 'V', 'V', 'V', 'V']
-	#bounds
-	lower = [10, 10, 1599, 0, 10, 10, 1127, 0, 10, 10, 1343, 0, 10, 10, 1489, 0, 10, 10, 1571, 0,
-		10, 10, 1230, 0]
-	upper = [np.inf, np.inf, 1624, 1, np.inf, np.inf, 1208, 1, np.inf, np.inf, 1358, 1, np.inf,
-		np.inf, 1545, 1, np.inf, np.inf, 1598, 1, np.inf, np.inf, 1300, 1]
-
-else:
-	shape = ['L', 'L', 'L', 'G', 'L', 'L']
-'''
-		#bounds
-lower = [10, 10, 1599, 10, 10, 1127, 10, 10, 1343, 10, 10, 1489, 10, 10, 1571,
-		10, 10, 1230]
-upper = [np.inf, np.inf, 1624, np.inf, np.inf, 1208, np.inf, np.inf, 1358,np.inf,
-		np.inf, 1545, np.inf, np.inf, 1598, np.inf, np.inf, 1300]
-
-
+figureBaseLine = plt.figure()
+figureResult = plt.figure()
+figureResultBaseline = plt.figure()
 ###################################
 font = {'family': 'serif',
 		'color':  'darkred',
@@ -69,6 +50,7 @@ linestyles = OrderedDict(
 ln_style = list(linestyles.items())
 answ = ['n', 'N']
 thrsh = 0.08
+
 
 class DATA:
 	def __init__(self):
@@ -110,8 +92,10 @@ class DATA:
 		self.bsCoef = np.polyfit(baselineX,baselineY, self.bsDegree)
 		fit = np.poly1d(self.bsCoef)
 		self.baseline = fit(self.X)
+		self.noBaseline = self.Y-self.baseline
 
 	def plotBaseline(self):
+		plt.close("all")
 		fig = plt.figure(figsize=(12,8))
 		ax = fig.add_subplot(111)
 		ax.plot(self.X, self.Y, label = 'Experimental data')
@@ -124,8 +108,9 @@ class DATA:
 		plt.grid()
 		plt.tight_layout()
 		plt.show(block=False)
-		
-		
+		return fig
+
+
 	def detectSpikes(self, threshold):
 		#detect spikes
 		self.spikes=[]
@@ -140,10 +125,13 @@ class DATA:
 		#remove spikes
 		print("Removing the spikes")
 		for idx in self.spikes:
-			self.Y = np.delete(self.Y, idx)
 			self.X = np.delete(self.X, idx)
+			self.Y = np.delete(self.Y, idx)
+			self.baseline= np.delete(self.baseline, idx)
+			self.noBaseline = np.delete(self.noBaseline, idx)
 
 class FIT:
+
 	def __init__(self, shape, names):
 		super(FIT, self).__init__()
 		self.names = names
@@ -200,27 +188,27 @@ class FIT:
 		self.area=[]
 		for name in self.names:
 			self.area = np.append(self.area ,np.trapz(self.peaks[name], x = self.peaks['freq']))
-			
-			
+
+
 	def deconvolute(self, data, parguess, bounds):
-		
+
 		self.peaks['freq']=data.X
 		self.peaks['exp'] = data.noBaseline
 		sigma =np.ones(len(data.X))*2
 		sigma[np.abs(data.X-1450)<50]=0.8
 		sigma[np.abs(data.X-900)<100]=0.8
 		sigma[np.abs(data.X-1800)<100]=0.7
-		
+
 		self.pars, pcov = curve_fit(self.model, data.X, data.noBaseline,  parguess, bounds = bounds)
 		self.perr= np.sqrt(np.diag(pcov))
-		
+
 		for i, name in enumerate(self.names):
 			indx = int(np.sum(self.args[:i]))
 			self.peaks[name] = self.Peak(data.X, *self.pars[indx:indx+self.args[i]], shape =self.shape[i])
 		self.peaks['cumulative']=self.model(data.X, *self.pars)
 		self.FWHM()
 		self.area()
-		self.printResult(data, saveName='result.txt')
+		self.printResult(data )
 
 	def plot(self, *args):
 		#plot six overlapping peaks (PAH, D4, D1, D3, G, D2)
@@ -238,8 +226,10 @@ class FIT:
 		ax.legend()
 		ax.grid()
 		plt.tight_layout()
-		
-	def printResult(self, data, **kwargs):
+		plt.show(block=False)
+		return fig
+
+	def printResult(self, data):
 
 		text = "****************BASELINE*******************\nDegree: %d\nCoefficients (starting with the highest power):\n"%data.bsDegree
 		text = text + str(data.bsCoef)
@@ -249,30 +239,26 @@ class FIT:
 			indx = int(np.sum(self.args[:i]))
 			params = self.pars[indx:indx+self.args[i]]
 			errs = self.perr[indx:indx+self.args[i]]
-			text = text +"Peak %s:\n	Centre: %.4f +/- %.4f cm-1\n	Amplitude: %.4f +/- %.4f\n	gamma: %.4f +/- %.4f\n	FWHM: %.4f\n" %(name, 
+			text = text +"Peak %s:\n	Centre: %.4f +/- %.4f cm-1\n	Amplitude: %.4f +/- %.4f\n	gamma: %.4f +/- %.4f\n	FWHM: %.4f\n" %(name,
 				params[2], errs[2], params[0], errs[0], params[1], errs[1], self.fwhm[i])
 			if self.shape[i]=='V':
 				text = text +"	L/G ratio = %.4f\n" %params[3]
 			self.intensity = np.append(self.intensity, params[0])
 			text = text +"	Area = %.4f\n" %self.area[i]
-		text = text +"\n**************Ratio - Amplitude************\n	D1/G= %.4f\n	D1/(G+D1+D2)= %.4f\n	D4/G= %.4f\n" %(self.intensity[2]/self.intensity[4], 
+		text = text +"\n**************Ratio - Amplitude************\n	D1/G= %.4f\n	D1/(G+D1+D2)= %.4f\n	D4/G= %.4f\n" %(self.intensity[2]/self.intensity[4],
 			self.intensity[2]/(self.intensity[4]+self.intensity[0]+self.intensity[2]), self.intensity[1]/self.intensity[4])
-		text = text +"\n**************Ratio - Areas****************\n	D1/G= %.4f\n	D1/(G+D1+D2)= %.4f\n	D4/G= %.4f\n" %(self.area[2]/self.area[4], 
+		text = text +"\n**************Ratio - Areas****************\n	D1/G= %.4f\n	D1/(G+D1+D2)= %.4f\n	D4/G= %.4f\n" %(self.area[2]/self.area[4],
 			self.area[2]/(self.area[4]+self.area[0]+self.area[2]), self.area[1]/self.area[4])
 		print(text)
-		if 'saveName' in kwargs:
-			output = open(kwargs.get('saveName'), "w")
-			output.writelines(text)
-			output.close()
+		self.report = text
 
-
-
-
+data = DATA()
 def readConf():
-	global degree, voigt, six, spike_detect, dataLimits, peakLimits, parameters
+	global degree, voigt, thrsh, six, spike_detect, dataLimits, peakLimits, parameters
 	config = configparser.ConfigParser()
 	if len(config.read('config/config.ini')):
 		degree = int(config['DEFAULT']['degree'])
+		thrsh = float(config['DEFAULT']['threshold'])
 		font_size = int(config['DEFAULT']['font_size'])
 		voigt = bool(int(config['DEFAULT']['voigt']))
 		spike_detect = bool(int(config['DEFAULT']['sp_detect']))
@@ -286,6 +272,7 @@ def readConf():
 		voigt = False
 		spike_detect = False
 		six = False
+		thrsh = 0.2
 		dataLimits = Limits(650, 2800)
 		peakLimits = Limits(900, 1800)
 	matplotlib.rcParams.update({'font.size': font_size})
@@ -296,116 +283,121 @@ def readConf():
 		os._exit(0)
 
 
-'''
-def deconvolute(item, save, verbose, bs_line):
-	global six, thrsh, degree
-	menu_flag = False
-	bs_flag = True
-	if save:
-		if not os.path.exists(item[:-4]):
-			os.makedirs(item[:-4])
-
-	data = np.loadtxt(item, skiprows = 2) #load data
-
-	if data[0,0]>limit[0]:
-		limit[0]=data[0,0]
-	low = np.argwhere(data[:,0]>limit[0])[0,0]
-	if data[-1,0]<limit[1]:
-		limit[1]=data[-2,0]
-	high = np.argwhere(data[:,0]>limit[1])[0,0]
-	x = data[low:high, 0]
-	y= data[low:high, 1]
-
-	#TO DO: IMPORVE THIS PART, MAKE IT MORE EFFICIENT
-	data =data[low:high,:]
-
-	
-
-	#baseline = peakutils.baseline(y, degree) #baseline
-	if degree ==1:
-		slope, intercept = fit_coef
-	else:
-		slope, intercept = -1, -1
-	intensity = y - baseline
-	if spike_detect:
-		spikes = detect_spikes(y)
-	else:
-		spikes = []
-	#plot the baseline and spikes
-	if bs_line:
-		baseLN = plot_baseline(x, y, baseline, spikes)
-	while bs_flag and verbose:
-		other_deg = input("Baseline polynomial degree is set to: %d\nDo you want to change it? [N/y]" %degree)
-		if other_deg in ['Y', 'y']:
-			try:
-				deg = int(input("New degree: "))
-			except ValueError:
-				print("Only numerical values are allowed")
-			degree = deg
-			fit_coef = np.polyfit(data_BSL[:,0],data_BSL[:,1],degree)
-			fit = np.poly1d(fit_coef)
-			baseline = fit(x) #baseline
-			intensity = y - baseline
-			baseLN = plot_baseline(x, y, baseline, spikes)
-		else:
-			bs_flag =False
-
-	if spike_detect:
-			#Remove the spikes or not?
-		while not menu_flag:
-			if verbose:
-				if spikes:
-					spk = input("Remove the spikes? [Y/n] ")
-				else:
-					spk ='n'
-			else:
-				spk='y'
-			if spk in answ:
-				try_again = input("Would you like to try again with a different threshold value? [Y/n] ")
-				if try_again in answ:
-					menu_flag=True
-				else:
-					print("Current value is %.1f%%" %(thrsh*100))
-					try:
-						thrsh = float(input("New value (in %): "))/100
-					except ValueError:
-						print("Only numbers are allowed")
-					print("New value is %.1f%%" %(thrsh*100))
-					spikes = detect_spikes(y)
-					baseLN = plot_baseline(x, y, baseline, spikes)
-			else:
-				#remove spikes
-				print("Removing the spikes")
-				menu_flag=True
-				for idx in spikes:
-					intensity = np.delete(intensity, idx)
-					x = np.delete(x, idx)
-
-	#get the number of peaks to fit with
-	print("\n***********Deconvolution*************")
-	if verbose:
-		pah = input("Take into account the PAH band? [Y/n] ")
-	else:
-		pah='y'
-	if pah =='n' or pah =='N':
-		six=False
-		print("Fitting without the PAH band")
-	else:
-		six=True
-		print("Fitting with the PAH band")
-
-
-
-	if(save):
-		fig_res.savefig(item[:-4]+'/fit.png')
-		fig_res_bsl.savefig(item[:-4]+'/fit+baseline.png')
-		baseLN.savefig(item[:-4]+'/baseline.png')
-
-'''
-if __name__ == '__main__':
-	print("#########################################################")
+def firstMenu(**kwargs):
+	os.system('clear')
 	print("............Deconvolution of RAMAN spectra...............")
-	print("#########################################################\n")
+	print("*********************************************************\n")
+	if 'error' in kwargs:
+		print('Not a valid choice\n')
+	print("Please choose an option:\n1 - Fit the baseline with different parameters")
+	print("2 - Adjust the spike-detector\n3 - Proceed to the deconvolution step\nq - Exit")
+	choice = input(" >> ")
+	try:
+		if choice.lower()=='3':
+			return
+		else:
+			menuOneActions[choice.lower()]()
+	except KeyError:
+		firstMenu(error=True)
+
+def bsLineMenu(**kwargs):
+	global data, figureBaseLine
+	os.system('clear')
+	if 'error' in kwargs:
+		print('Only numerical values are allowed')
+		choice = 'y'
+	else:
+		print('************Baseline menu****************\n')
+		print('Baseline polynomial degree is set to: %d' %data.bsDegree)
+		choice = input('Do you want to change it? [Y/n] >> ')
+	if choice.lower()!='n':
+		try:
+			deg = int(input("New degree: "))
+			data.fitBaseline(deg, peakLimits)
+			figureBaseLine = data.plotBaseline()
+			menuOneActions['0']()
+		except ValueError:
+			print("Only numerical values are allowed")
+			bsLineMenu(error=True)
+
+
+def spikeMenu(**kwargs):
+	global data, thrsh, figureBaseLine
+	os.system('clear')
+	if 'error' in kwargs:
+		print('Only numerical values are allowed')
+		choice = 'y'
+	else:
+		print('**************Spike menu****************\n')
+		print('Current threshold value is: %.2f' %thrsh)
+		choice = input('Do you want to change it? [Y/n] >> ')
+	if choice.lower()!='n':
+		try:
+			thrsh = float(input("New threshold: "))
+			data.detectSpikes(thrsh)
+			figureBaseLine = data.plotBaseline()
+			menuOneActions['0']()
+		except ValueError:
+			print("Only numerical values are allowed")
+			spikeMenu(error=True)
+
+
+def secondMenu(**kwargs):
+	global data, parameters, figureResult, figureResultBaseline
+	os.system('clear')
+	choice = input('Do you want to remove the spikes? [Y/n] >> ')
+	if choice.lower()!='n':
+		data.removeSpikes()
+	choice = input('Fit with the PAH band? [y/N] >> ')
+	nr = 5
+	if choice.lower()=='y':
+		nr=6
+	names = parameters['labels'][:nr]
+	shape = parameters['shape'][:nr]
+	fit = FIT(shape, names)
+	parguess =np.concatenate( [[parameters['intens'][i], parameters['width'][i],
+			parameters['freq'][i], parameters['voigt'][i]] if shape[i]=='V' else
+			[parameters['intens'][i], parameters['width'][i], parameters['freq'][i]]
+			for i in np.arange(0, len(names))])
+	lower = np.concatenate( [[parameters['intens_min'][i], parameters['width_min'][i],
+			parameters['freq_min'][i], parameters['voigt_min'][i]] if shape[i]=='V' else
+			[parameters['intens_min'][i], parameters['width_min'][i], parameters['freq_min'][i]]
+			for i in np.arange(0, len(names))])
+	upper = np.concatenate( [[parameters['intens_max'][i], parameters['width_max'][i],
+			parameters['freq_max'][i], parameters['voigt_max'][i]] if shape[i]=='V' else
+			[parameters['intens_max'][i], parameters['width_max'][i], parameters['freq_max'][i]]
+			for i in np.arange(0, len(names))])
+	bounds = [lower, upper]
+	fit.deconvolute(data, parguess, bounds)
+	figureResult = fit.plot()
+	figureResultBaseline = fit.plot(data.baseline)
+	plt.show()
+	return fit
+
+def ThirdMenu():
+	os.system('clear')
+	print('**************Save menu****************\n')
+	choice = input('Do you want to save all the results it? [y/N] >> ')
+	if choice.lower()=='y':
+		return True
+	else:
+		return False
+
+
+def exit():
+	os._exit(0)
+
+
+menuOneActions = {
+	'1' : bsLineMenu,
+	'2' : spikeMenu,
+	'q' : exit,
+	'0' : firstMenu
+}
+
+
+if __name__ == '__main__':
+
 	readConf()
 	'''
 	parser = ap.ArgumentParser(description='Deconvolution of Raman spectra')
@@ -418,40 +410,33 @@ if __name__ == '__main__':
 	parser.add_argument('name', help='File name')
 	args = parser.parse_args()
 	'''
-	data = DATA()
+	inputFile = sys.argv[1]
+	path = inputFile[:-4]
 	data.loadData(sys.argv[1])
 	data.setLimits(dataLimits)
 	data.fitBaseline(degree, peakLimits)
+	data.detectSpikes(thrsh)
 	data.noBaseline=data.Y
-	data.plotBaseline()
-	names = parameters['labels'][:5]
-	shape = parameters['shape'][:5]
-	fit = FIT(shape, names)
-	parguess =np.concatenate( [[parameters['intens'][i], parameters['width'][i], 
-			parameters['freq'][i], parameters['voigt'][i]] if shape[i]=='V' else 
-			[parameters['intens'][i], parameters['width'][i], parameters['freq'][i]] 
-			for i in np.arange(0, len(names))])
-	lower = np.concatenate( [[parameters['intens_min'][i], parameters['width_min'][i],
-			parameters['freq_min'][i], parameters['voigt_min'][i]] if shape[i]=='V' else 
-			[parameters['intens_min'][i], parameters['width_min'][i], parameters['freq_min'][i]] 
-			for i in np.arange(0, len(names))])
-	upper = np.concatenate( [[parameters['intens_max'][i], parameters['width_max'][i], 
-			parameters['freq_max'][i], parameters['voigt_max'][i]] if shape[i]=='V' else 
-			[parameters['intens_max'][i], parameters['width_max'][i], parameters['freq_max'][i]] 
-			for i in np.arange(0, len(names))])
-	bounds = [lower, upper]
-	#plt.plot(data.X, fit.model(data.X, *parguess))
-	fit.deconvolute(data, parguess, bounds)
-	#fit.plot(data.X)
-	fit.plot()
-	plt.show()
-	
-	out = pd.DataFrame()
-	out['Raman shift'] = data.X
-	out['Raw data'] = data.Y
-	out['Baseline'] = data.baseline
-	out['Intensity'] = data.noBaseline
-	out = pd.concat([out, fit.peaks[np.append(names, 'cumulative')]], axis=1, sort=False)
+	figureBaseLine = data.plotBaseline()
+	firstMenu()
+	fit = secondMenu()
+	if ThirdMenu():
+		if not os.path.exists(path):
+			os.makedirs(path)
+		figureBaseLine.savefig(path+'/baseline.png')
+		figureResult.savefig(path+'/result.png')
+		figureResultBaseline.savefig(path+'/result+baseline.png')
+		out = pd.DataFrame()
+		out['Raman shift'] = data.X
+		out['Raw data'] = data.Y
+		out['Baseline'] = data.baseline
+		out['Intensity'] = data.noBaseline
+		out = pd.concat([out, fit.peaks[np.append(fit.names, 'cumulative')]], axis=1, sort=False)
+		out.to_csv(path +'/data.csv', index=None)
+		output = open(path+'/report.txt', "w")
+		output.writelines(fit.report)
+		output.close()
+
 	'''
 	spike_detect= args.filter
 	if (args.path):
