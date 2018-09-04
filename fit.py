@@ -1,6 +1,7 @@
 '''
 Class handling the deconvolution process
 '''
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -100,20 +101,22 @@ class FIT:
 		sigma[np.abs(data.X-1450)<50]=0.8
 		sigma[np.abs(data.X-900)<100]=0.8
 		sigma[np.abs(data.X-1800)<100]=0.7
+		try:
+			#Fit
+			self.pars, pcov = curve_fit(self.model, data.X, data.noBaseline,  parguess, bounds = bounds)
+			self.perr= np.sqrt(np.diag(pcov))
 
-		#Fit
-		self.pars, pcov = curve_fit(self.model, data.X, data.noBaseline,  parguess, bounds = bounds)
-		self.perr= np.sqrt(np.diag(pcov))
-
-		#Calculate each peak
-		for i, name in enumerate(self.names):
-			indx = int(np.sum(self.args[:i]))
-			self.peaks[name] = self.Peak(data.X, *self.pars[indx:indx+self.args[i]], shape =self.shape[i])
-		self.peaks['cumulative']=self.model(data.X, *self.pars) #save the fit result
-		self.FWHM() #calculate fwhm
-		self.area() #calculate the areas
-		self.printResult(data) #print the fit report
-
+			#Calculate each peak
+			for i, name in enumerate(self.names):
+				indx = int(np.sum(self.args[:i]))
+				self.peaks[name] = self.Peak(data.X, *self.pars[indx:indx+self.args[i]], shape =self.shape[i])
+			self.peaks['cumulative']=self.model(data.X, *self.pars) #save the fit result
+			self.FWHM() #calculate fwhm
+			self.area() #calculate the areas
+			self.printResult(data) #print the fit report
+		except RuntimeError:
+			print('Failed to deconvolute...\nTry with a different initial guess')
+			os._exit(0)
 	def plot(self, *args):
 		#plot overlapping peaks with or without the baseline
 		baseline = np.zeros(len(self.peaks['freq']))
