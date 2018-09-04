@@ -183,6 +183,7 @@ menuOneActions = {
 if __name__ == '__main__':
 	#Parse the arguments && help
 	parser = ap.ArgumentParser(description='Deconvolution of Raman spectra')
+	parser.add_argument('-c', '--convert', help="convert *.wdf files to *.txt", action ="store_true")
 	parser.add_argument('name', help='File/Directory name')
 	args = parser.parse_args()
 
@@ -190,29 +191,30 @@ if __name__ == '__main__':
 	inputFile = args.name
 	path = inputFile[:-4]
 	data.loadData(inputFile) #load the data
-	data.setLimits(dataLimits) #set data limits
-	data.fitBaseline(degree, peakLimits) #fit the baseline (first time)
-	data.detectSpikes(thrsh) #Look for the spikes
-	figureBaseLine = data.plotBaseline() #plot the baseline
-	firstMenu() #Show the first menu
-	fit = secondMenu() #Show the second menu
+	if not args.convert:
+		data.setLimits(dataLimits) #set data limits
+		data.fitBaseline(degree, peakLimits) #fit the baseline (first time)
+		data.detectSpikes(thrsh) #Look for the spikes
+		figureBaseLine = data.plotBaseline() #plot the baseline
+		firstMenu() #Show the first menu
+		fit = secondMenu() #Show the second menu
 
-	if ThirdMenu(): #to save or not to save?
-		if not os.path.exists(path):
-			os.makedirs(path) #create the directory for the report
-		figureBaseLine.savefig(path+'/baseline.png')
-		figureResult.savefig(path+'/result.png')
-		figureResultBaseline.savefig(path+'/result+baseline.png')
-		out = pd.DataFrame()
-		out['Raman shift'] = data.X
-		out['Raw data'] = data.Y
-		out['Baseline'] = data.baseline
-		out['Intensity'] = data.noBaseline
-		out = pd.concat([out, fit.peaks[np.append(fit.names, 'cumulative')]], axis=1, sort=False)
-		out.to_csv(path +'/data.csv', index=None)
-		output = open(path+'/report.txt', "w")
-		output.writelines(fit.report)
-		output.close()
+		if ThirdMenu(): #to save or not to save?
+			if not os.path.exists(path):
+				os.makedirs(path) #create the directory for the report
+			figureBaseLine.savefig(path+'/baseline.png')
+			figureResult.savefig(path+'/result.png')
+			figureResultBaseline.savefig(path+'/result+baseline.png')
+			out = pd.DataFrame()
+			out['Raman shift'] = data.X
+			out['Raw data'] = data.Y
+			out['Baseline'] = data.baseline
+			out['Intensity'] = data.noBaseline
+			out = pd.concat([out, fit.peaks[np.append(fit.names, 'cumulative')]], axis=1, sort=False)
+			out.to_csv(path +'/data.csv', index=None)
+			output = open(path+'/report.txt', "w")
+			output.writelines(fit.report)
+			output.close()
 
 
 

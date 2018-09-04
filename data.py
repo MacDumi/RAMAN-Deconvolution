@@ -4,6 +4,7 @@ Class dealing with the Raman data
 '''
 import numpy as np
 import matplotlib.pyplot as plt
+from wdfReader import *
 
 class DATA:
 	def __init__(self):
@@ -19,13 +20,22 @@ class DATA:
 
 	def loadData(self, path):
 		#load data
-		try:
-			dt = np.loadtxt(path, skiprows =10)
-		except OSError:
-			print("File not found")
-			return
-		self.X = dt[:,0]
-		self.Y = dt[:,1]
+		if path[-3:]=='wdf':
+			try:
+				wdfFile = wdfReader(path)
+			except:
+				print("Couldn't read the file")
+			dt = np.column_stack((wdfFile.get_xdata(), wdfFile.get_spectra()))
+			np.savetxt(path[:-3]+'txt', dt, delimiter='	')
+			self.loadData(path[:-3]+'txt')
+		else:
+			try:
+				dt = np.loadtxt(path, skiprows =10)
+			except OSError:
+				print("File not found")
+				return
+			self.X = dt[:,0]
+			self.Y = dt[:,1]
 
 	def setLimits(self, limits):
 		#set the limits for the loaded data and crop it
