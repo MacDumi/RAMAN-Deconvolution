@@ -27,7 +27,7 @@ font = {'family': 'serif',
 		'weight': 'normal',
 		'size': 14,
 		}
-		
+
 
 def readConf():
 	#read the configuration file
@@ -123,9 +123,10 @@ def secondMenu(**kwargs):
 	#Second menu - deconvolution
 	global data, parameters, figureResult, figureResultBaseline
 	os.system('clear')
-	choice = input('Do you want to remove the spikes? [Y/n] >> ')
-	if choice.lower()!='n':
-		data.removeSpikes()
+	if len(data.spikes):
+		choice = input('Do you want to remove the spikes? [Y/n] >> ')
+		if choice.lower()!='n':
+			data.removeSpikes()
 	choice = input('Fit with the PAH band? [y/N] >> ')
 	nr = 5
 	if choice.lower()=='y':

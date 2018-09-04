@@ -49,9 +49,7 @@ class DATA:
 		self.bsCoef = np.polyfit(baselineX,baselineY, self.bsDegree)
 		fit = np.poly1d(self.bsCoef)
 		self.baseline = fit(self.X)
-		self.noBaseline = self.Y-self.baseline
-		if min(self.noBaseline)<0:
-			self.noBaseline += abs(min(self.noBaseline))
+		self.noBaseline = abs(self.Y-self.baseline)
 
 
 	def plotBaseline(self):
@@ -86,10 +84,9 @@ class DATA:
 	def removeSpikes(self):
 		#remove spikes
 		print("Removing the spikes")
-		for idx in self.spikes:
-			self.X = np.delete(self.X, idx)
-			self.Y = np.delete(self.Y, idx)
-			self.baseline= np.delete(self.baseline, idx)
-			self.noBaseline = np.delete(self.noBaseline, idx)
+		self.X = np.delete(self.X, self.spikes)
+		self.Y = np.delete(self.Y, self.spikes )
+		self.baseline= np.delete(self.baseline, self.spikes)
+		self.noBaseline = np.delete(self.noBaseline, self.spikes)
 
 
