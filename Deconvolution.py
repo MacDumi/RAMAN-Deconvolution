@@ -28,7 +28,6 @@ font = {'family': 'serif',
 		'size': 14,
 		}
 
-
 def readConf():
 	#read the configuration file
 	global degree, voigt, thrsh, six, spike_detect, dataLimits, peakLimits, parameters
@@ -39,6 +38,7 @@ def readConf():
 		font_size = int(config['DEFAULT']['font_size'])
 		dataLimits = Limits(int(config['LIMITS']['low']), int(config['LIMITS']['high']))
 		peakLimits = Limits(int(config['PEAK']['low']), int(config['PEAK']['high']))
+		dark = bool(int(config['DEFAULT']['dark']))
 	else:
 		#load the defaults
 		print('Could not find the config file...\nLoading defaults')
@@ -50,7 +50,12 @@ def readConf():
 		thrsh = 0.2
 		dataLimits = Limits(650, 2800)
 		peakLimits = Limits(900, 1800)
+		dark = False
 	matplotlib.rcParams.update({'font.size': font_size})
+	if dark:
+		plt.style.use('dark_background')
+	else:
+		plt.style.use('default')
 	#load fitting parameters
 	try:
 		parameters = pd.read_csv('config/initialData.csv')
