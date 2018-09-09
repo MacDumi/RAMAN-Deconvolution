@@ -29,10 +29,11 @@ font = {'family': 'serif',
 		}
 
 def readConf():
+	path =os.path.dirname(os.path.realpath(__file__))
 	#read the configuration file
 	global degree, voigt, thrsh, six, spike_detect, dataLimits, peakLimits, parameters
 	config = configparser.ConfigParser()
-	if len(config.read('config/config.ini')):
+	if len(config.read(path+'/config/config.ini')):
 		degree = int(config['DEFAULT']['degree'])
 		thrsh = float(config['DEFAULT']['threshold'])
 		font_size = int(config['DEFAULT']['font_size'])
@@ -58,7 +59,7 @@ def readConf():
 		plt.style.use('default')
 	#load fitting parameters
 	try:
-		parameters = pd.read_csv('config/initialData.csv')
+		parameters = pd.read_csv(path+'/config/initialData.csv')
 	except FileNotFoundError:
 		print('Initial parameters were not loaded\nFile not found\nexiting....')
 		os._exit(0)
