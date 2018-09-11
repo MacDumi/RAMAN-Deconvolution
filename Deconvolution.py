@@ -156,6 +156,7 @@ def secondMenu(**kwargs):
 	print("How many peaks do you want to use?\n1 - 4 (D4, D1, D3, G)")
 	print("2 - 5 (D4, D1, D3, G, D2)\n3 - 6 (D4, D1, D3, G, D2, PAH)\nq - Exit")
 	choice = input(" >> ")
+	nr = 4
 	if choice =='1':
 		nr = 4
 	elif choice == '2':

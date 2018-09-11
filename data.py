@@ -6,8 +6,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
-from convertwdf import convert
-#from wdfReader import *
+from convertwdf import *
 
 class DATA:
 	def __init__(self):
@@ -24,11 +23,6 @@ class DATA:
 	def loadData(self, path):
 		#load data
 		if path[-3:]=='wdf':
-			try:
-				convert(path, text=True)
-			except:
-				print("Couldn't read the file")
-				return
 			self.loadData(path[:-3]+'txt')
 		else:
 			try:
