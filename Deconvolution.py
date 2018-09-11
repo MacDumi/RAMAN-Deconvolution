@@ -1,8 +1,9 @@
 #!/usr/bin/python3
 import numpy as np
+import matplotlib
+matplotlib.use('Qt5Agg')
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib
 import peakutils
 import argparse as ap
 import glob
@@ -31,7 +32,7 @@ font = {'family': 'serif',
 def readConf():
 	path =os.path.dirname(os.path.realpath(__file__))
 	#read the configuration file
-	global degree, voigt, thrsh, six, spike_detect, dataLimits, peakLimits, parameters
+	global degree, voigt, thrsh, six, spike_detect, dataLimits, peakLimits, parameters, skipRegion, _abs
 	config = configparser.ConfigParser()
 	if len(config.read(path+'/config/config.ini')):
 		degree = int(config['DEFAULT']['degree'])
@@ -40,6 +41,19 @@ def readConf():
 		dataLimits = Limits(int(config['LIMITS']['low']), int(config['LIMITS']['high']))
 		peakLimits = Limits(int(config['PEAK']['low']), int(config['PEAK']['high']))
 		dark = bool(int(config['DEFAULT']['dark']))
+		if bool(int(config['SKIP_REGION']['skip'])):
+			skipRegion = Limits(int(config['SKIP_REGION']['low']), int(config['SKIP_REGION']['high']))
+			if skipRegion.max > dataLimits.max:
+				skipRegion.max = dataLimits.max
+			if skipRegion.min > dataLimits.max:
+				skipRegion.min = dataLimits.max
+			if skipRegion.max < dataLimits.min:
+				skipRegion.min = dataLimits.min
+			if skipRegion.min < dataLimits.min:
+				skipRegion.min = dataLimits.min
+		else:
+			skipRegion = 0
+		_abs = bool(int(config['DEFAULT']['abs']))
 	else:
 		#load the defaults
 		print('Could not find the config file...\nLoading defaults')
@@ -52,6 +66,7 @@ def readConf():
 		dataLimits = Limits(650, 2800)
 		peakLimits = Limits(900, 1800)
 		dark = False
+		_abs = False
 	matplotlib.rcParams.update({'font.size': font_size})
 	if dark:
 		plt.style.use('dark_background')
@@ -97,7 +112,10 @@ def bsLineMenu(**kwargs):
 	if choice.lower()!='n':
 		try:
 			deg = int(input("New degree: "))
-			data.fitBaseline(deg, peakLimits)
+			if _abs:
+				data.fitBaseline(deg, peakLimits, abs=_abs)
+			else:
+				data.fitBaseline(deg, peakLimits)
 			figureBaseLine = data.plotBaseline()
 			menuOneActions['0']()
 		except ValueError:
@@ -133,10 +151,21 @@ def secondMenu(**kwargs):
 		choice = input('Do you want to remove the spikes? [Y/n] >> ')
 		if choice.lower()!='n':
 			data.removeSpikes()
-	choice = input('Fit with the PAH band? [y/N] >> ')
-	nr = 5
-	if choice.lower()=='y':
+	if 'error' in kwargs:
+		print('Not a valid choice\n')
+	print("How many peaks do you want to use?\n1 - 4 (D4, D1, D3, G)")
+	print("2 - 5 (D4, D1, D3, G, D2)\n3 - 6 (D4, D1, D3, G, D2, PAH)\nq - Exit")
+	choice = input(" >> ")
+	if choice =='1':
+		nr = 4
+	elif choice == '2':
+		nr = 5
+	elif choice =='3':
 		nr=6
+	elif choice =='q':
+		menuOneActions[choice.lower()]()
+	else:
+		secondMenu(error=True)
 	names = parameters['labels'][:nr]
 	shape = parameters['shape'][:nr]
 	fit = FIT(shape, names)
@@ -199,7 +228,10 @@ if __name__ == '__main__':
 	data.loadData(inputFile) #load the data
 	if not args.convert:
 		data.setLimits(dataLimits) #set data limits
-		data.fitBaseline(degree, peakLimits) #fit the baseline (first time)
+		if _abs:
+			data.fitBaseline(degree, peakLimits, skipRegion, abs=_abs) #fit the baseline (first time)
+		else:
+			data.fitBaseline(degree, peakLimits, skipRegion) #fit the baseline (first time)
 		data.detectSpikes(thrsh) #Look for the spikes
 		figureBaseLine = data.plotBaseline() #plot the baseline
 		firstMenu() #Show the first menu

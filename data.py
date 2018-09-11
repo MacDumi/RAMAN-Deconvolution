@@ -3,8 +3,11 @@ Class dealing with the Raman data
 
 '''
 import numpy as np
+import matplotlib
+matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
-from wdfReader import *
+from convertwdf import convert
+#from wdfReader import *
 
 class DATA:
 	def __init__(self):
@@ -22,15 +25,14 @@ class DATA:
 		#load data
 		if path[-3:]=='wdf':
 			try:
-				wdfFile = wdfReader(path)
+				convert(path, text=True)
 			except:
 				print("Couldn't read the file")
-			dt = np.column_stack((wdfFile.get_xdata(), wdfFile.get_spectra()))
-			np.savetxt(path[:-3]+'txt', dt, delimiter='	')
+				return
 			self.loadData(path[:-3]+'txt')
 		else:
 			try:
-				dt = np.loadtxt(path, skiprows =10)
+				dt = np.loadtxt(path, skiprows =5)
 			except OSError:
 				print("File not found")
 				return
@@ -48,18 +50,38 @@ class DATA:
 		self.X = self.X[low:high]
 		self.Y = self.Y[low:high]
 
-	def fitBaseline(self, degree, limits):
+	def fitBaseline(self, degree, limits, skip, **kwargs):
 		#Select the part without Raman peaks and fit a polynomial function
 		self.limits = limits
+		self.skip = skip
 		baselineX = np.append(self.X[:np.argwhere(self.X>self.limits.min)[0][0]],
 			self.X[np.argwhere(self.X>self.limits.max)[0][0]:])
 		baselineY = np.append(self.Y[:np.argwhere(self.X>self.limits.min)[0][0]],
 			self.Y[np.argwhere(self.X>self.limits.max)[0][0]:])
+		if self.skip:
+			if self.skip.min<self.X[0]:
+				self.skip.min =self.X[0]
+			if self.skip.min>self.X[-2]:
+				self.skip.min =self.X[-2]
+			if self.skip.max<self.X[0]:
+				self.skip.max =self.X[0]
+			if self.skip.max>self.X[-2]:
+				self.skip.max =self.X[-2]
+			baselineY = np.append(baselineY[:np.argwhere(baselineX>self.skip.min)[0][0]],
+				baselineY[np.argwhere(baselineX>self.skip.max)[0][0]:])
+			baselineX = np.append(baselineX[:np.argwhere(baselineX>self.skip.min)[0][0]],
+				baselineX[np.argwhere(baselineX>self.skip.max)[0][0]:])
 		self.bsDegree = degree
 		self.bsCoef = np.polyfit(baselineX,baselineY, self.bsDegree)
 		fit = np.poly1d(self.bsCoef)
 		self.baseline = fit(self.X)
-		self.noBaseline = abs(self.Y-self.baseline)
+		self.noBaseline = self.Y-self.baseline
+		if 'abs' in kwargs:
+			self.noBaseline = abs(self.noBaseline)
+		else:
+			Min = min(self.noBaseline)
+			if Min <0:
+				self.noBaseline = self.noBaseline + abs(Min)
 
 
 	def plotBaseline(self):
@@ -73,6 +95,9 @@ class DATA:
 		ax.plot(self.X, self.baseline, 'r--', label = 'Baseline')
 		ax.plot([self.limits.min, self.limits.min], [min(self.Y), max(self.Y)], 'r-')
 		ax.plot([self.limits.max,self.limits.max],[min(self.Y), max(self.Y)], 'r-', label='Excluded region')
+		if self.skip:
+			ax.plot([self.skip.min, self.skip.min], [min(self.Y), max(self.Y)], 'y-')
+			ax.plot([self.skip.max, self.skip.max], [min(self.Y), max(self.Y)], 'y-', label = 'Second excluded region')
 		ax.set_ylabel("Intensity")
 		ax.set_xlabel("Raman shift, $cm^{-1}$")
 		plt.legend()

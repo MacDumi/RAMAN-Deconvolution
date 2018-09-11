@@ -3,6 +3,8 @@ Class handling the deconvolution process
 '''
 import os
 import numpy as np
+import matplotlib
+matplotlib.use('Qt5Agg')
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
@@ -117,6 +119,7 @@ class FIT:
 		except RuntimeError:
 			print('Failed to deconvolute...\nTry with a different initial guess')
 			os._exit(0)
+
 	def plot(self, *args):
 		#plot overlapping peaks with or without the baseline
 		baseline = np.zeros(len(self.peaks['freq']))
@@ -152,10 +155,12 @@ class FIT:
 				text = text +"	L/G ratio = %.4f\n" %params[3]
 			self.intensity = np.append(self.intensity, params[0])
 			text = text +"	Area = %.4f\n" %self.area[i]
-		text = text +"\n**************Ratio - Amplitude************\n	D1/G= %.4f\n	D1/(G+D1+D2)= %.4f\n	D4/G= %.4f\n" %(self.intensity[2]/self.intensity[4],
-			self.intensity[2]/(self.intensity[4]+self.intensity[0]+self.intensity[2]), self.intensity[1]/self.intensity[4])
-		text = text +"\n**************Ratio - Areas****************\n	D1/G= %.4f\n	D1/(G+D1+D2)= %.4f\n	D4/G= %.4f\n" %(self.area[2]/self.area[4],
-			self.area[2]/(self.area[4]+self.area[0]+self.area[2]), self.area[1]/self.area[4])
+		text = text +"\n**************Ratio - Amplitude************\n	D1/G= %.4f\n	D4/G= %.4f\n" %(self.intensity[1]/self.intensity[3], self.intensity[0]/self.intensity[3])
+		if len(self.intensity)==5:
+			text +="    D1/(G+D1+D2)= %.4f\n" %self.intensity[1]/(self.intensity[3]+self.intensity[4]+self.intensity[1])
+		text = text +"\n**************Ratio - Areas****************\n	D1/G= %.4f\n	D4/G= %.4f\n" %(self.area[1]/self.area[3], self.area[0]/self.area[3])
+		if len(self.area)==5:
+			text +="    D1/(G+D1+D2)= %.4f\n" %self.area[1]/(self.area[3]+self.area[4]+self.area[1])
 		print(text)
 		self.report = text
 
