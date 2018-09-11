@@ -31,7 +31,7 @@ By default the baseline is calculated using a third degree polynomial function. 
 Default values are loaded from the configuration file (./config/config/ini). 
 To change the initial guess, bounds and the shape of peaks, edit the ./config/initialData.csv
 
-###WDF file converter
+### WDF file converter
 You can convert wdf files to a more manageable format (txt, csv) by running the convertwdf.py script.
 
 	$./convertwdf.py <pathToFile>
