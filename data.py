@@ -32,6 +32,9 @@ class DATA:
 				return
 			self.X = dt[:,0]
 			self.Y = dt[:,1]
+	def setData(self, X, Y):
+		self.X =X
+		self.Y=Y
 
 	def setLimits(self, limits):
 		#set the limits for the loaded data and crop it
@@ -65,6 +68,11 @@ class DATA:
 				baselineY[np.argwhere(baselineX>self.skip.max)[0][0]:])
 			baselineX = np.append(baselineX[:np.argwhere(baselineX>self.skip.min)[0][0]],
 				baselineX[np.argwhere(baselineX>self.skip.max)[0][0]:])
+			self.Y = np.append(self.Y[:np.argwhere(self.X>self.skip.min)[0][0]],
+				self.Y[np.argwhere(self.X>self.skip.max)[0][0]:])
+			self.X = np.append(self.X[:np.argwhere(self.X>self.skip.min)[0][0]],
+				self.X[np.argwhere(self.X>self.skip.max)[0][0]:])
+
 		self.bsDegree = degree
 		self.bsCoef = np.polyfit(baselineX,baselineY, self.bsDegree)
 		fit = np.poly1d(self.bsCoef)

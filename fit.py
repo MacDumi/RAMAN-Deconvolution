@@ -100,12 +100,15 @@ class FIT:
 		self.peaks['exp'] = data.noBaseline
 		#weighting function (lower value - higher weight)
 		sigma =np.ones(len(data.X))*2
-		sigma[np.abs(data.X-1450)<50]=0.8
-		sigma[np.abs(data.X-900)<100]=0.8
-		sigma[np.abs(data.X-1800)<100]=0.7
+		sigma[np.abs(data.X-1500)<100]=0.6
+		sigma[np.abs(data.X-1360)<40]=0.7
+		sigma[np.abs(data.X-1180)<100]=0.6
+		sigma[np.abs(data.X-1600)<50]=0.7
+		sigma[np.abs(data.X-900)<100]=0.9
+		sigma[np.abs(data.X-1750)<100]=0.9
 		try:
 			#Fit
-			self.pars, pcov = curve_fit(self.model, data.X, data.noBaseline,  parguess, bounds = bounds)
+			self.pars, pcov = curve_fit(self.model, data.X, data.noBaseline, parguess, sigma=sigma, bounds = bounds)
 			self.perr= np.sqrt(np.diag(pcov))
 
 			#Calculate each peak
@@ -127,7 +130,7 @@ class FIT:
 			baseline = args[0]
 		fig = plt.figure(figsize=(12,8))
 		ax = fig.add_subplot(111)
-		ax.plot(self.peaks['freq'], self.peaks['exp']+baseline,'o',markersize=3, color = '#1E68FF',label='Experimental data')
+		ax.scatter(self.peaks['freq'], self.peaks['exp']+baseline, s=70,linewidth=1.5, facecolors = 'none', edgecolor = '#1E68FF',label='Experimental data')
 		ax.plot(self.peaks['freq'], self.peaks['cumulative']+baseline, 'r-',linewidth = 1, label='Cumulative')
 		for i, name in enumerate(self.names):
 			ax.plot(self.peaks['freq'], self.peaks[name]+baseline, linewidth = 2,linestyle = ln_style[i][1], label =name)
@@ -156,11 +159,13 @@ class FIT:
 			self.intensity = np.append(self.intensity, params[0])
 			text = text +"	Area = %.4f\n" %self.area[i]
 		text = text +"\n**************Ratio - Amplitude************\n	D1/G= %.4f\n	D4/G= %.4f\n" %(self.intensity[1]/self.intensity[3], self.intensity[0]/self.intensity[3])
+		'''
 		if len(self.intensity)==5:
 			text +="    D1/(G+D1+D2)= %.4f\n" %self.intensity[1]/(self.intensity[3]+self.intensity[4]+self.intensity[1])
 		text = text +"\n**************Ratio - Areas****************\n	D1/G= %.4f\n	D4/G= %.4f\n" %(self.area[1]/self.area[3], self.area[0]/self.area[3])
 		if len(self.area)==5:
 			text +="    D1/(G+D1+D2)= %.4f\n" %self.area[1]/(self.area[3]+self.area[4]+self.area[1])
+		'''
 		print(text)
 		self.report = text
 

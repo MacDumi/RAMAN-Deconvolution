@@ -13,11 +13,12 @@ def convert(path, **kwarg):
 			return
 		X = data.get_xdata()
 		Y = data.get_spectra()
-		nr = int(len(Y)/len(X))
+		nr = data.count
+		header = 'Number of spectra: %d\nPoints per spectrum: %d\nAccumulation count: %d\nLaser wavenumber: %.6f\n' %(data.count, data.point_per_spectrum, data.accumulation_count, data.laser_wavenumber)
 		if nr ==1:
 			print("File contains one spectrum")
 			dt = np.column_stack((X, Y))
-			np.savetxt(path[:-3]+'txt', dt, delimiter='	')
+			np.savetxt(path[:-3]+'txt', dt, delimiter='	', header=header)
 			print("Text file was exported")
 		else:
 			print("File contains %d spectra" %nr)
@@ -28,6 +29,6 @@ def convert(path, **kwarg):
 			out.to_csv(path[:-3]+'csv', index=None)
 			print("CSV file exported")
 			if 'text' in kwarg:
-				np.savetxt(path[:-3]+'txt', out.values[:,:2], delimiter='	')
+				np.savetxt(path[:-3]+'txt', out.values[:,:2], header=header, delimiter='	')
 if len(sys.argv)>1:
 	convert(sys.argv[1])

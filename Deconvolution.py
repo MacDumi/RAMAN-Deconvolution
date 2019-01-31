@@ -154,7 +154,7 @@ def secondMenu(**kwargs):
 	if 'error' in kwargs:
 		print('Not a valid choice\n')
 	print("How many peaks do you want to use?\n1 - 4 (D4, D1, D3, G)")
-	print("2 - 5 (D4, D1, D3, G, D2)\n3 - 6 (D4, D1, D3, G, D2, PAH)\nq - Exit")
+	print("2 - 5 (D4, D1, D3, G, D2)\n3 - 6 (D4, D1, D3, G, D2, D1\')\nq - Exit")
 	choice = input(" >> ")
 	nr = 4
 	if choice =='1':

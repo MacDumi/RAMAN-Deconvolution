@@ -1,2 +1,7 @@
-.gitignore
-config/initialData.csv.bk
+# Log files:
+*.log
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+#design files
+*.ui
