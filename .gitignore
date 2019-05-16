@@ -1,7 +1,4 @@
-# Log files:
-*.log
-# Byte-compiled / optimized / DLL files
+matplotlib
 __pycache__/
-*.py[cod]
-#design files
-*.ui
+elements.py
+molmass.py
