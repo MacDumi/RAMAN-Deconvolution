@@ -94,7 +94,7 @@ class FIT:
                         self.area = np.append(self.area ,np.trapz(self.peaks[name], x = self.peaks['freq']))
 
 
-        def deconvolute(self, data, parguess, bounds):
+        def deconvolute(self, data, parguess, bounds, batch):
                 #deconvolution routine
                 self.peaks['freq']=data.X
                 self.peaks['exp'] = data.noBaseline
@@ -107,10 +107,11 @@ class FIT:
                 sigma[np.abs(data.X-900)<100]=0.9
                 sigma[np.abs(data.X-1750)<100]=0.9
                 try:
-                        #Fit
-                        self.pars, pcov = curve_fit(self.model, data.X, data.noBaseline, parguess, sigma=sigma, bounds = bounds)
-                        self.perr= np.sqrt(np.diag(pcov))
+                    #Fit
+                    self.pars, pcov = curve_fit(self.model, data.X, data.noBaseline, parguess, sigma=sigma, bounds = bounds)
+                    self.perr= np.sqrt(np.diag(pcov))
 
+                    if not batch:
                         #Calculate each peak
                         for i, name in enumerate(self.names):
                                 indx = int(np.sum(self.args[:i]))
@@ -120,8 +121,9 @@ class FIT:
                         self.area() #calculate the areas
                         self.printResult(data) #print the fit report
                 except RuntimeError:
+                    if not batch:
                         print('Failed to deconvolute...\nTry with a different initial guess')
-                        os._exit(0)
+                        # os._exit(0)
 
         def plot(self, *args):
                 #plot overlapping peaks with or without the baseline
@@ -152,7 +154,7 @@ class FIT:
                         indx = int(np.sum(self.args[:i]))
                         params = self.pars[indx:indx+self.args[i]]
                         errs = self.perr[indx:indx+self.args[i]]
-                        text = text +"Peak %s:\n        Centre: %.4f +/- %.4f cm-1\n    Amplitude: %.4f +/- %.4f\n      gamma: %.4f +/- %.4f\n  FWHM: %.4f\n" %(name,
+                        text = text +"Peak %s:\n        Center: %.4f +/- %.4f cm-1\n    Amplitude: %.4f +/- %.4f\n      gamma: %.4f +/- %.4f\n  FWHM: %.4f\n" %(name,
                                 params[2], errs[2], params[0], errs[0], params[1], errs[1], self.fwhm[i])
                         if self.shape[i]=='V':
                                 text = text +"  L/G ratio = %.4f\n" %params[3]

@@ -9,6 +9,8 @@ import argparse as ap
 import glob
 import os, sys
 import configparser
+from tqdm import tqdm
+from multiprocessing import Pool, cpu_count
 from recordtype import recordtype
 from data import DATA
 from fit import FIT
@@ -167,6 +169,14 @@ def secondMenu(**kwargs):
                 secondMenu(error=True)
         if nr>len(peaks):
                 secondMenu(error=True)
+        fit, parguess, bounds = bound(nr)
+        fit.deconvolute(data, parguess, bounds, False)
+        figureResult = fit.plot()
+        figureResultBaseline = fit.plot(data.baseline)
+        plt.show()
+        return fit
+
+def bound(nr):
         names = parameters['labels'][:nr]
         shape = parameters['shape'][:nr]
         fit = FIT(shape, names)
@@ -185,12 +195,8 @@ def secondMenu(**kwargs):
                         parameters['freq_max'][i], parameters['voigt_max'][i]] if shape[i]=='V' else
                         [parameters['intens_max'][i], parameters['width_max'][i], parameters['freq_max'][i]]
                         for i in np.arange(0, len(names))])
-        bounds = [lower, upper]
-        fit.deconvolute(data, parguess, bounds)
-        figureResult = fit.plot()
-        figureResultBaseline = fit.plot(data.baseline)
-        plt.show()
-        return fit
+        return fit, parguess, [lower, upper]
+
 
 def ThirdMenu():
         #Third menu (Save menu)
@@ -215,46 +221,91 @@ menuOneActions = {
         '0' : firstMenu
 }
 
+def prepareInput(path):
+        data.loadData(path) #load the data
+        data.setLimits(dataLimits) #set data limits
+        if _abs:
+                data.fitBaseline(degree, peakLimits, skipRegion, abs=_abs) #fit the baseline (first time)
+        else:
+                data.fitBaseline(degree, peakLimits, skipRegion) #fit the baseline (first time)
+
+def wrapper(name):
+        data = DATA()
+        data.loadData(name) #load the data
+        data.setLimits(dataLimits) #set data limits
+        if _abs:
+                data.fitBaseline(degree, peakLimits, skipRegion, abs=_abs) #fit the baseline (first time)
+        else:
+                data.fitBaseline(degree, peakLimits, skipRegion) #fit the baseline (first time)
+        fit, parguess, bounds = bound(nr_bands)
+        fit.deconvolute(data, parguess, bounds, True)
+        return name, fit.pars
+
 
 if __name__ == '__main__':
         #Parse the arguments && help
         parser = ap.ArgumentParser(description='Deconvolution of Raman spectra')
-        parser.add_argument('-b', '--bands', help="number of bands to use", action ="store_true")
-        parser.add_argument('-c', '--convert', help="convert *.wdf files to *.txt", action ="store_true")
+        parser.add_argument('-b', '--batch', help="fit multiple files", action ="store_true")
+        parser.add_argument('-n', type=int, help='number of bands (for batch fitting only)')
         parser.add_argument('name', help='File/Directory name')
         args = parser.parse_args()
 
         readConf() #read the config file
         inputFile = args.name
-        path = inputFile[:-4]
-        data.loadData(inputFile) #load the data
-        if not args.convert:
-                data.setLimits(dataLimits) #set data limits
-                if _abs:
-                        data.fitBaseline(degree, peakLimits, skipRegion, abs=_abs) #fit the baseline (first time)
-                else:
-                        data.fitBaseline(degree, peakLimits, skipRegion) #fit the baseline (first time)
-                data.detectSpikes(thrsh) #Look for the spikes
-                figureBaseLine = data.plotBaseline() #plot the baseline
-                firstMenu() #Show the first menu
-                fit = secondMenu() #Show the second menu
+        if args.batch:
+            os.system('clear')
+            if args.n:
+                nr_bands = args.n
+            else:
+                nr_bands = 2
+            try:
+                files = glob.glob(inputFile+'/*.txt')
+                print(len(files), ' files found')
+            except:
+                print('Not a valid path')
+                exit()
+            if not len(files):
+                print('Did not find text files...exiting')
+                exit()
 
-                if ThirdMenu(): #to save or not to save?
-                        if not os.path.exists(path):
-                                os.makedirs(path) #create the directory for the report
-                        figureBaseLine.savefig(path+'/baseline.png')
-                        figureResult.savefig(path+'/result.png')
-                        figureResultBaseline.savefig(path+'/result+baseline.png')
-                        out = pd.DataFrame()
-                        out['Raman shift'] = data.X
-                        out['Raw data'] = data.Y
-                        out['Baseline'] = data.baseline
-                        out['Intensity'] = data.noBaseline
-                        out = pd.concat([out, fit.peaks[np.append(fit.names, 'cumulative')]], axis=1, sort=False)
-                        out.to_csv(path +'/data.csv', index=None)
-                        output = open(path+'/report.txt', "w")
-                        output.writelines(fit.report)
-                        output.close()
+            nproc = cpu_count()
+            pool  = Pool(nproc)
 
+            names = parameters['labels'][:nr_bands]
+            shape = parameters['shape'][:nr_bands]
+            #list of parameter names
+            labels = [[names[i]+'_amplitude', names[i]+'_gamma', names[i]+'_center', names[i]+'_voigt_ratio']
+                            if shape[i]=='V' else [names[i]+'_amplitude', names[i]+'_gamma', names[i]+'_center']
+                            for i in np.arange(0, len(names))]
+            labels = [item for sublist in labels for item in sublist]
+            out = pd.DataFrame()
+            out['labels'] = np.asarray(labels).flatten()
+            for n, r in tqdm(pool.imap_unordered(wrapper, files), total=len(files)):
+                out[os.path.basename(n)] =r
+            out.to_csv(inputFile+'/fit.csv', index=None)
+            print('Fitting completed...output saved')
+        else:
+            path = inputFile[:-4]
+            prepareInput(inputFile)
+            data.detectSpikes(thrsh) #Look for the spikes
+            figureBaseLine = data.plotBaseline() #plot the baseline
+            firstMenu() #Show the first menu
+            fit = secondMenu() #Show the second menu
 
+            if ThirdMenu(): #to save or not to save?
+                    if not os.path.exists(path):
+                            os.makedirs(path) #create the directory for the report
+                    figureBaseLine.savefig(path+'/baseline.png')
+                    figureResult.savefig(path+'/result.png')
+                    figureResultBaseline.savefig(path+'/result+baseline.png')
+                    out = pd.DataFrame()
+                    out['Raman shift'] = data.X
+                    out['Raw data'] = data.Y
+                    out['Baseline'] = data.baseline
+                    out['Intensity'] = data.noBaseline
+                    out = pd.concat([out, fit.peaks[np.append(fit.names, 'cumulative')]], axis=1, sort=False)
+                    out.to_csv(path +'/data.csv', index=None)
+                    output = open(path+'/report.txt', "w")
+                    output.writelines(fit.report)
+                    output.close()
 
