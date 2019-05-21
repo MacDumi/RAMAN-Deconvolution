@@ -282,7 +282,6 @@ if __name__ == '__main__':
 
             nproc = cpu_count()
             pool  = Pool(nproc)
-            print('number of bands: ', nr_bands)
             names = parameters['labels'][:nr_bands]
             shape = parameters['shape'][:nr_bands]
             #list of parameter names
@@ -290,7 +289,6 @@ if __name__ == '__main__':
                             if shape[i]=='V' else [names[i]+'_amplitude', names[i]+'_gamma', names[i]+'_center']
                             for i in np.arange(0, len(names))]
             labels = [item for sublist in labels for item in sublist]
-            print(labels)
             function = partial(wrapper, parameters, nr_bands)
             out = pd.DataFrame()
             out['labels'] = np.asarray(labels).flatten()
