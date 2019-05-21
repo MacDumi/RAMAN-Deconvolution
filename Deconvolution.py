@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+from functools import partial
 import numpy as np
 import matplotlib
 matplotlib.use('Qt5Agg')
@@ -10,7 +11,8 @@ import glob
 import os, sys
 import configparser
 from tqdm import tqdm
-from multiprocessing import Pool, cpu_count
+import multiprocessing as mp
+from multiprocessing import Pool, cpu_count, Value
 from recordtype import recordtype
 from data import DATA
 from fit import FIT
@@ -24,17 +26,36 @@ figureBaseLine = plt.figure()
 figureResult = plt.figure()
 figureResultBaseline = plt.figure()
 
+#default parameters
+degree = 3
+font_size = 18
+voigt = False
+spike_detect = False
+six = False
+thrsh = 0.2
+dataLimits = Limits(600, 2300)
+peakLimits = Limits(900, 1850)
+dark = False
+_abs = True
+skipRegion = 0
+nr_bands = 2
 ###################################
 font = {'family': 'serif',
                 'color':  'darkred',
                 'weight': 'normal',
                 'size': 14,
                 }
-
+def clear():
+        #for Windows
+        if os.name == 'nt':
+            _ = os.system('cls')
+        #for posix
+        else:
+            _ = os.system('clear')
 def readConf():
         path =os.path.dirname(os.path.realpath(__file__))
         #read the configuration file
-        global degree, voigt, thrsh, six, spike_detect, dataLimits, peakLimits, parameters, skipRegion, _abs
+        global degree, voigt, thrsh, six, spike_detect, peakLimits, parameters, skipRegion, _abs
         config = configparser.ConfigParser()
         if len(config.read(path+'/config/config.ini')):
                 degree = int(config['DEFAULT']['degree'])
@@ -59,16 +80,6 @@ def readConf():
         else:
                 #load the defaults
                 print('Could not find the config file...\nLoading defaults')
-                degree = 3
-                font_size = 18
-                voigt = False
-                spike_detect = False
-                six = False
-                thrsh = 0.2
-                dataLimits = Limits(650, 2800)
-                peakLimits = Limits(900, 1800)
-                dark = False
-                _abs = False
         matplotlib.rcParams.update({'font.size': font_size})
         if dark:
                 plt.style.use('dark_background')
@@ -84,7 +95,7 @@ def readConf():
 
 def firstMenu(**kwargs):
         #First menu
-        os.system('clear')
+        clear()
         print("............Deconvolution of RAMAN spectra...............")
         print("*********************************************************\n")
         if 'error' in kwargs:
@@ -103,7 +114,7 @@ def firstMenu(**kwargs):
 def bsLineMenu(**kwargs):
         #Baseline menu
         global data, figureBaseLine
-        os.system('clear')
+        clear()
         if 'error' in kwargs:
                 print('Only numerical values are allowed')
                 choice = 'y'
@@ -127,7 +138,7 @@ def bsLineMenu(**kwargs):
 def spikeMenu(**kwargs):
         #Spike detector menu
         global data, thrsh, figureBaseLine
-        os.system('clear')
+        clear()
         if 'error' in kwargs:
                 print('Only numerical values are allowed')
                 choice = 'y'
@@ -148,7 +159,7 @@ def spikeMenu(**kwargs):
 def secondMenu(**kwargs):
         #Second menu - deconvolution
         global data, parameters, figureResult, figureResultBaseline
-        os.system('clear')
+        clear()
         if len(data.spikes):
                 choice = input('Do you want to remove the spikes? [Y/n] >> ')
                 if choice.lower()!='n':
@@ -169,14 +180,14 @@ def secondMenu(**kwargs):
                 secondMenu(error=True)
         if nr>len(peaks):
                 secondMenu(error=True)
-        fit, parguess, bounds = bound(nr)
+        fit, parguess, bounds = bound(nr, parameters)
         fit.deconvolute(data, parguess, bounds, False)
         figureResult = fit.plot()
         figureResultBaseline = fit.plot(data.baseline)
         plt.show()
         return fit
 
-def bound(nr):
+def bound(nr, parameters):
         names = parameters['labels'][:nr]
         shape = parameters['shape'][:nr]
         fit = FIT(shape, names)
@@ -200,7 +211,7 @@ def bound(nr):
 
 def ThirdMenu():
         #Third menu (Save menu)
-        os.system('clear')
+        clear()
         print('**************Save menu****************\n')
         choice = input('Do you want to save all the results it? [y/N] >> ')
         if choice.lower()=='y':
@@ -229,7 +240,7 @@ def prepareInput(path):
         else:
                 data.fitBaseline(degree, peakLimits, skipRegion) #fit the baseline (first time)
 
-def wrapper(name):
+def wrapper(parameters, nr, name):
         data = DATA()
         data.loadData(name) #load the data
         data.setLimits(dataLimits) #set data limits
@@ -237,7 +248,7 @@ def wrapper(name):
                 data.fitBaseline(degree, peakLimits, skipRegion, abs=_abs) #fit the baseline (first time)
         else:
                 data.fitBaseline(degree, peakLimits, skipRegion) #fit the baseline (first time)
-        fit, parguess, bounds = bound(nr_bands)
+        fit, parguess, bounds = bound(nr, parameters)
         fit.deconvolute(data, parguess, bounds, True)
         return name, fit.pars
 
@@ -253,7 +264,8 @@ if __name__ == '__main__':
         readConf() #read the config file
         inputFile = args.name
         if args.batch:
-            os.system('clear')
+            clear()
+            mp.set_start_method('spawn')
             if args.n:
                 nr_bands = args.n
             else:
@@ -270,7 +282,7 @@ if __name__ == '__main__':
 
             nproc = cpu_count()
             pool  = Pool(nproc)
-
+            print('number of bands: ', nr_bands)
             names = parameters['labels'][:nr_bands]
             shape = parameters['shape'][:nr_bands]
             #list of parameter names
@@ -278,9 +290,11 @@ if __name__ == '__main__':
                             if shape[i]=='V' else [names[i]+'_amplitude', names[i]+'_gamma', names[i]+'_center']
                             for i in np.arange(0, len(names))]
             labels = [item for sublist in labels for item in sublist]
+            print(labels)
+            function = partial(wrapper, parameters, nr_bands)
             out = pd.DataFrame()
             out['labels'] = np.asarray(labels).flatten()
-            for n, r in tqdm(pool.imap_unordered(wrapper, files), total=len(files)):
+            for n, r in tqdm(pool.imap_unordered(function, files), total=len(files)):
                 out[os.path.basename(n)] =r
             out.to_csv(inputFile+'/fit.csv', index=None)
             print('Fitting completed...output saved')

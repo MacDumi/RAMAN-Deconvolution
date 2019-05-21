@@ -141,7 +141,7 @@ class FIT:
                 ax.legend()
                 ax.grid()
                 plt.tight_layout()
-                plt.show(block=False)
+                plt.show()
                 return fig
 
         def printResult(self, data):

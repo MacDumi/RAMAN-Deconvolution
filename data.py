@@ -105,7 +105,7 @@ class DATA:
                 plt.legend()
                 plt.grid()
                 plt.tight_layout()
-                plt.show(block=False)
+                plt.show()
                 return fig
 
         def detectSpikes(self, threshold):
