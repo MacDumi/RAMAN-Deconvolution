@@ -57,34 +57,35 @@ class DATA:
                 self.X = self.X[low:high]
                 self.Y = self.Y[low:high]
 
-        def fitBaseline(self, degree, limits, skip, **kwargs):
+        def fitBaseline(self, degree, limits, **kwargs):
                 #Select the part without Raman peaks and fit a polynomial function
+                print(degree, limits)
                 self.limits = limits
-                self.skip = skip
                 baselineX = np.append(self.X[:np.argwhere(self.X>self.limits.min)[0][0]],
                         self.X[np.argwhere(self.X>self.limits.max)[0][0]:])
                 baselineY = np.append(self.Y[:np.argwhere(self.X>self.limits.min)[0][0]],
                         self.Y[np.argwhere(self.X>self.limits.max)[0][0]:])
-                if self.skip:
-                        if self.skip.min<self.X[0]:
-                                self.skip.min =self.X[0]
-                        if self.skip.min>self.X[-2]:
-                                self.skip.min =self.X[-2]
-                        if self.skip.max<self.X[0]:
-                                self.skip.max =self.X[0]
-                        if self.skip.max>self.X[-2]:
-                                self.skip.max =self.X[-2]
-                        baselineY = np.append(baselineY[:np.argwhere(baselineX>self.skip.min)[0][0]],
-                                baselineY[np.argwhere(baselineX>self.skip.max)[0][0]:])
-                        baselineX = np.append(baselineX[:np.argwhere(baselineX>self.skip.min)[0][0]],
-                                baselineX[np.argwhere(baselineX>self.skip.max)[0][0]:])
-                        self.Y = np.append(self.Y[:np.argwhere(self.X>self.skip.min)[0][0]],
-                                self.Y[np.argwhere(self.X>self.skip.max)[0][0]:])
-                        self.X = np.append(self.X[:np.argwhere(self.X>self.skip.min)[0][0]],
-                                self.X[np.argwhere(self.X>self.skip.max)[0][0]:])
+                # if self.skip:
+                #         if self.skip.min<self.X[0]:
+                #                 self.skip.min =self.X[0]
+                #         if self.skip.min>self.X[-2]:
+                #                 self.skip.min =self.X[-2]
+                #         if self.skip.max<self.X[0]:
+                #                 self.skip.max =self.X[0]
+                #         if self.skip.max>self.X[-2]:
+                #                 self.skip.max =self.X[-2]
+                #         baselineY = np.append(baselineY[:np.argwhere(baselineX>self.skip.min)[0][0]],
+                #                 baselineY[np.argwhere(baselineX>self.skip.max)[0][0]:])
+                #         baselineX = np.append(baselineX[:np.argwhere(baselineX>self.skip.min)[0][0]],
+                #                 baselineX[np.argwhere(baselineX>self.skip.max)[0][0]:])
+                #         self.Y = np.append(self.Y[:np.argwhere(self.X>self.skip.min)[0][0]],
+                #                 self.Y[np.argwhere(self.X>self.skip.max)[0][0]:])
+                #         self.X = np.append(self.X[:np.argwhere(self.X>self.skip.min)[0][0]],
+                #                 self.X[np.argwhere(self.X>self.skip.max)[0][0]:])
 
                 self.bsDegree = degree
                 self.bsCoef = np.polyfit(baselineX,baselineY, self.bsDegree)
+                print(self.bsCoef)
                 fit = np.poly1d(self.bsCoef)
                 self.baseline = fit(self.X)
                 self.noBaseline = self.Y-self.baseline
