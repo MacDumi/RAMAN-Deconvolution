@@ -36,15 +36,18 @@ class FIT:
                 self.peaks = pd.DataFrame()
                 self.fwhm = np.zeros(len(self.names))
 
-        def Voigt(self, x, I, x0, s, n):
+        @staticmethod
+        def Voigt(x, I, x0, s, n):
                 #voigt peak
                 return n*I/(1+((x - x0)**2 /s**2)) + (1-n)*I*exp(-(x-x0)**2/(2*s**2))
 
-        def gauss(self, x, I, x0, s):
+        @staticmethod
+        def gauss(x, I, x0, s):
                 #gaussian peak
                 return I*exp(-(x-x0)**2/(2*s**2))
 
-        def lorents(self, x, I, x0, s):
+        @staticmethod
+        def lorents( x, I, x0, s):
                 #lorentzian peak
                 return I/ (1+((x - x0)**2 /s**2))
 

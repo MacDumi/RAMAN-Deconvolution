@@ -36,6 +36,16 @@ class DATA:
                 self.X =X
                 self.Y=Y
 
+        def crop(self, _min, _max):
+            min_ = np.argwhere(self.X>int(_min))[0][0]
+            max_ = np.argwhere(self.X>int(_max))[0][0]
+            self.X = self.X[min_ : max_]
+            self.Y = self.Y[min_ : max_]
+            if np.shape(self.baseline):
+                self.baseline = self.baseline[min_ : max_]
+            if np.shape(self.noBaseline):
+                self.noBaseline = self.noBaseline[min_ : max_]
+
         def setLimits(self, limits):
                 #set the limits for the loaded data and crop it
                 if self.X[0]>limits.min:

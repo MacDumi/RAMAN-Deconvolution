@@ -265,7 +265,7 @@ if __name__ == '__main__':
         inputFile = args.name
         if args.batch:
             clear()
-            mp.set_start_method('spawn')
+            # mp.set_start_method('spawn')
             if args.n:
                 nr_bands = args.n
             else:
