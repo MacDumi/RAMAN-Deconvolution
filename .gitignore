@@ -2,3 +2,4 @@ matplotlib
 __pycache__/
 elements.py
 molmass.py
+*.ui
