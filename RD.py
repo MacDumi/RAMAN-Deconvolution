@@ -52,13 +52,21 @@ class BaselineDialog(QDialog, baseline_dialog.Ui_Dialog):
 
 class RD(QMainWindow, gui.Ui_MainWindow):
 
+    header = """
+     *************************************************
+
+             DECONVOLUTION OF RAMAN SPECTRA
+
+     *************************************************
+    """
 
     def __init__(self):
         super(RD, self).__init__()
         self.setupUi(self)
         #variables
-        self.initialDir = '/home/cat/RAMAN/'
+        self.initialDir = '/home/cat/'
         self.data = DATA()
+        self.changed = False
         self.peaksLimits = Limits(900, 1850)
 
         # self.actionQuit.triggered.connect(self.close)
@@ -76,7 +84,8 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.tabifyDockWidget(self.dockGuess, self.dockOut)
         self.dockGuess.raise_()
         self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        # self.tableWidget.horizontalHeader().setStretchLastSection(True)
+        self.textOut.setReadOnly(True)
+        self.textOut.setText(self.header)
         self.readConfig()
 
         self.figure = plt.figure()
@@ -154,6 +163,20 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.Plot(self.data.X, self.data.Y, "Experimental data")
         self.Plot(self.data.X, self.data.baseline, "Baseline", clear = False)
         self.plotAdjust()
+        self.textOut.append('*************************************************\n')
+        self.textOut.append('             BASELINE FIT                        \n')
+        self.textOut.append('*************************************************\n')
+        print(self.data.bsCoef)
+        for deg in np.arange(0, self.data.bsDegree+1)[::-1]:
+            if self.data.bsCoef[deg]>=0:
+                text = '+'
+            self.textOut.append(text + '{}*x**{}'.format([self.data.bsCoef[deg], deg]))
+        self.textOut.append('\n\n')
+        if not self.changed:
+            self.changed = True
+            self.setWindowTitle(self.windowTitle()+'*')
+
+
 
 
 
@@ -217,6 +240,9 @@ class RD(QMainWindow, gui.Ui_MainWindow):
             self.statusbar.showMessage("Data loaded", 2000)
             self.Plot(self.data.X, self.data.Y, 'Experimental data')
             self.setWindowTitle( 'Raman Deconvolution - ' + ntpath.basename(fname))
+            self.changed = False
+            seld.textOut.clear()
+            self.textOut.setText(self.header)
         except:
             self.errorBox('Could not load the file', 'I/O error')
             self.statusbar.showMessage("Error loading the file", 2000)
@@ -264,6 +290,9 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.data.crop(_min, _max)
         self.statusbar.showMessage("Data cropped", 3000)
         self.Plot(self.data.X, self.data.Y, "Experimental data")
+        if not self.changed:
+            self.changed = True
+            self.setWindowTitle(self.windowTitle()+'*')
 
     def tableItemRightClicked(self, QPos):
         self.listMenu= QMenu()
