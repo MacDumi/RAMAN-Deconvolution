@@ -52,13 +52,8 @@ class BaselineDialog(QDialog, baseline_dialog.Ui_Dialog):
 
 class RD(QMainWindow, gui.Ui_MainWindow):
 
-    header = """
-     *************************************************
-
-             DECONVOLUTION OF RAMAN SPECTRA
-
-     *************************************************
-    """
+    header  = 50*'*'+'\n\n'+10*' '+'DECONVOLUTION OF RAMAN SPECTRA'
+    header += 10*''+'\n\n'+50*'*'
 
     def __init__(self):
         super(RD, self).__init__()
@@ -149,6 +144,8 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.canvas.draw()
         dialog = BaselineDialog(self.degree, self.peakLimits.min, self.peakLimits.max)
         result = dialog.exec_()
+        if not result:
+            return
         params = dialog.getData()
         try:
             _min = int(params[2])
@@ -163,15 +160,17 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.Plot(self.data.X, self.data.Y, "Experimental data")
         self.Plot(self.data.X, self.data.baseline, "Baseline", clear = False)
         self.plotAdjust()
-        self.textOut.append('*************************************************\n')
-        self.textOut.append('             BASELINE FIT                        \n')
-        self.textOut.append('*************************************************\n')
-        print(self.data.bsCoef)
-        for deg in np.arange(0, self.data.bsDegree+1)[::-1]:
-            if self.data.bsCoef[deg]>=0:
-                text = '+'
-            self.textOut.append(text + '{}*x**{}'.format([self.data.bsCoef[deg], deg]))
-        self.textOut.append('\n\n')
+        self.textOut.append('                  BASELINE FIT                   ')
+        self.textOut.append('*************************************************')
+        self.textOut.append('Polynomial fit -- degree: {}'.format(self.data.bsDegree))
+        self.textOut.append('Fitting equation:')
+        text = ''
+        for deg in np.arange(0, self.data.bsDegree+1):
+            if self.data.bsCoef[deg]>=0 and deg!=0:
+                text += '+'
+            text += '{:.4E}*x^{}'.format(self.data.bsCoef[deg], self.data.bsDegree-deg)
+        self.textOut.append(text + '\n')
+        self.dockOut.raise_()
         if not self.changed:
             self.changed = True
             self.setWindowTitle(self.windowTitle()+'*')
@@ -241,7 +240,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
             self.Plot(self.data.X, self.data.Y, 'Experimental data')
             self.setWindowTitle( 'Raman Deconvolution - ' + ntpath.basename(fname))
             self.changed = False
-            seld.textOut.clear()
+            self.textOut.clear()
             self.textOut.setText(self.header)
         except:
             self.errorBox('Could not load the file', 'I/O error')

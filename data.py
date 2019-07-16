@@ -59,7 +59,6 @@ class DATA:
 
         def fitBaseline(self, degree, limits, **kwargs):
                 #Select the part without Raman peaks and fit a polynomial function
-                print(degree, limits)
                 self.limits = limits
                 baselineX = np.append(self.X[:np.argwhere(self.X>self.limits.min)[0][0]],
                         self.X[np.argwhere(self.X>self.limits.max)[0][0]:])
@@ -85,7 +84,6 @@ class DATA:
 
                 self.bsDegree = degree
                 self.bsCoef = np.polyfit(baselineX,baselineY, self.bsDegree)
-                print(self.bsCoef)
                 fit = np.poly1d(self.bsCoef)
                 self.baseline = fit(self.X)
                 self.noBaseline = self.Y-self.baseline
