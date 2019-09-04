@@ -132,7 +132,8 @@ class DATA:
                 print("Removing the spikes")
                 self.X = np.delete(self.X, self.spikes)
                 self.Y = np.delete(self.Y, self.spikes )
-                self.baseline= np.delete(self.baseline, self.spikes)
-                self.noBaseline = np.delete(self.noBaseline, self.spikes)
+                if np.shape(self.baseline):
+                    self.baseline= np.delete(self.baseline, self.spikes)
+                    self.noBaseline = np.delete(self.noBaseline, self.spikes)
 
 

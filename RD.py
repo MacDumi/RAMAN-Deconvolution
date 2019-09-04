@@ -10,6 +10,7 @@ import configparser
 import gui
 import crop_dialog
 import baseline_dialog
+import spike_dialog
 from fit import FIT
 from data import DATA
 from convertwdf import *
@@ -21,6 +22,16 @@ from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
 
 Limits = recordtype('Limits', ['min', 'max'])
+
+"Spike dialog"
+class SpikeDialog (QDialog, spike_dialog.Ui_Dialog):
+    def __init__(self, threshold):
+        super(SpikeDialog, self).__init__()
+        self.setupUi(self)
+        self.setFixedSize(self.size())
+        self.slider.setValue(threshold)
+        self.lb_value.setText("%d" %int(threshold))
+        self.slider.valueChanged.connect(lambda : self.lb_value.setText("%d"%self.slider.value()))
 
 "Crop dialog"
 class CropDialog (QDialog, crop_dialog.Ui_Dialog):
@@ -63,6 +74,9 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.data = DATA()
         self.changed = False
         self.peaksLimits = Limits(900, 1850)
+        self.spike = 0 #scatter plot for spikes
+        self.limit_low, self.limit_high = 0, 0 #exclude region
+        self.baseline = 0
 
         # self.actionQuit.triggered.connect(self.close)
         self.actionAbout.triggered.connect(self.about)
@@ -83,6 +97,9 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.textOut.setText(self.header)
         self.readConfig()
 
+        self.spikeDialog = SpikeDialog(self.threshold)
+        self.spikeDialog.slider.sliderReleased.connect(self.showSpikes)
+
         self.figure = plt.figure()
         self.figure.set_tight_layout(True)
         self.subplot = self.figure.add_subplot(111) #add a subfigure
@@ -95,20 +112,23 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.gridLayout.addWidget(self.toolbar)
         self.gridLayout.addWidget(self.canvas)
 
-        actionOpen = QAction(QIcon("graphics/open.png"),"Open",self)
-        actionSave = QAction(QIcon("graphics/save.png"),"Save",self)
-        actionCrop = QAction(QIcon("graphics/crop.png"),"Crop",self)
+        actionOpen  = QAction(QIcon("graphics/open.png"),"Open",self)
+        actionSave  = QAction(QIcon("graphics/save.png"),"Save",self)
+        actionCrop  = QAction(QIcon("graphics/crop.png"),"Crop",self)
+        actionSpike = QAction(QIcon("graphics/spike.png"),"Spike removal",self)
         actionBaseline = QAction(QIcon("graphics/baseline.png"),"Remove baseline",self)
         self.toolBar.addAction(actionOpen)
         self.toolBar.addAction(actionSave)
         self.toolBar.addSeparator()
         self.toolBar.addAction(actionCrop)
         self.toolBar.addAction(actionBaseline)
+        self.toolBar.addAction(actionSpike)
         self.toolBar.addSeparator()
         self.toolBar.toggleViewAction().setChecked(True)
         actionOpen.triggered.connect(self.New)
         actionCrop.triggered.connect(self.Crop)
         actionBaseline.triggered.connect(self.Baseline)
+        actionSpike.triggered.connect(self.removeSpikes)
 
         self.startUp()
 
@@ -130,6 +150,38 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.subplot.set_xlim(np.min(X), np.max(X))
         self.plotAdjust()
 
+    def removeSpikes(self):
+        if not np.shape(self.data.X):
+            self.errorBox('There is no data', 'No data...')
+            return
+        self.showSpikes()
+        result = self.spikeDialog.exec_()
+        if not result:
+            self.data.spikes = []
+            if self.spike != 0:
+                self.spike.remove()
+                self.spike = 0
+                self.subplot.legend()
+                self.canvas.draw()
+            return
+        self.data.removeSpikes()
+        self.statusbar.showMessage("%d datapoints removed" %len(self.data.spikes), 2000)
+        self.Plot(self.data.X, self.data.Y, "Experimental data", clear=True)
+
+
+    def showSpikes(self):
+        self.data.detectSpikes(self.spikeDialog.slider.value())
+        if self.spike != 0:
+            self.spike.remove()
+            self.spike = 0
+            self.canvas.draw()
+        sp = self.data.spikes
+        if len(sp):
+            self.spike, = self.subplot.plot(self.data.X[sp], self.data.Y[sp], 'ro', label = 'Spikes')
+            self.subplot.legend()
+            self.canvas.draw()
+
+
     def plotAdjust(self):
         self.subplot.set_xlabel(r'$\mathbf{Raman\ shift,\ cm^{-1}}$')
         self.subplot.set_ylabel(r'$\mathbf{Intensty}$')
@@ -137,25 +189,26 @@ class RD(QMainWindow, gui.Ui_MainWindow):
 
     #right click on the plot
     def onclick(self, event):
-        if len(self.data.X):
+        if  np.shape(self.data.X):
             if event.button == 3:  #right click
                 self.listMenu= QMenu()
                 menu_item_0 = self.listMenu.addAction("Delete datapoint (spike)")
                 idx = np.abs(self.data.X - event.xdata).argmin()
                 self.statusbar.showMessage('Datapoint selected: X = %f, Y = %f' %(self.data.X[idx], self.data.Y[idx]), 1000)
-                spike, = self.subplot.plot(self.data.X[idx], self.data.Y[idx], 'ro')
+                self.spike, = self.subplot.plot(self.data.X[idx], self.data.Y[idx], 'rs', label = 'Selected datapoint')
+                self.subplot.legend()
                 self.canvas.draw()
                 cursor = QCursor()
                 menu_item_0.triggered.connect(lambda: self.deleteSpike(idx))
                 self.listMenu.move(cursor.pos() )
                 self.listMenu.show()
-                self.listMenu.aboutToHide.connect(lambda : [spike.remove(), self.canvas.draw()])
+                self.listMenu.aboutToHide.connect(lambda : [self.spike.remove(), self.canvas.draw()])
 
     def deleteSpike(self, x):
         self.statusbar.showMessage('Spike deleted: X = %f, Y = %f' %(self.data.X[x], self.data.Y[x]), 1000)
-        self.data.X = np.delete(self.data.X, x)
-        self.data.Y = np.delete(self.data.Y, x)
-        self.Plot(self.data.X, self.data.Y, "Experimental data", clear=True)
+        self.data.spikes = x
+        self.data.removeSpikes()
+        self.Plot(self.data.X, self.data.Y, "Experimental data")
 
 
 
@@ -163,14 +216,20 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         if not np.shape(self.data.X):
             self.errorBox('There is no data', 'No data...')
             return
-        _min, _max = self.peakLimits.min, self.peakLimits.max
-        self.subplot.plot([_min, _min], [np.min(self.data.Y), np.max(self.data.Y)], color = 'red', label = 'Exclude region')
-        self.subplot.plot([_max, _max], [np.min(self.data.Y), np.max(self.data.Y)], color = 'red')
-        self.subplot.legend()
-        self.canvas.draw()
+        if np.shape(self.data.noBaseline):
+            self.Plot(self.data.X, self.data.Y, "Experimental data")
         dialog = BaselineDialog(self.degree, self.peakLimits.min, self.peakLimits.max)
+        dialog.btPreview.clicked.connect(lambda: self.previewBaseline(dialog))
+        self.previewBaseline(dialog)
         result = dialog.exec_()
         if not result:
+            self.limit_low.remove()
+            self.limit_high.remove()
+            self.baseline.remove()
+            self.limit_low, self.limit_high = 0, 0
+            self.baseline = 0
+            self.subplot.legend()
+            self.canvas.draw()
             return
         params = dialog.getData()
         try:
@@ -183,9 +242,9 @@ class RD(QMainWindow, gui.Ui_MainWindow):
             self.statusbar.showMessage("Wrong value...setting to default", 3000)
         self.peakLimits = Limits(_min, _max)
         self.data.fitBaseline(params[1], self.peakLimits)
-        self.Plot(self.data.X, self.data.Y, "Experimental data")
-        self.Plot(self.data.X, self.data.baseline, "Baseline", clear = False)
+        self.Plot(self.data.X, self.data.noBaseline, "Baseline corrected data")
         self.plotAdjust()
+        self.textOut.clear()
         self.textOut.append('                  BASELINE FIT                   ')
         self.textOut.append('*************************************************')
         self.textOut.append('Polynomial fit -- degree: {}'.format(self.data.bsDegree))
@@ -201,6 +260,30 @@ class RD(QMainWindow, gui.Ui_MainWindow):
             self.changed = True
             self.setWindowTitle(self.windowTitle()+'*')
 
+    def previewBaseline(self, dialog):
+        dt = DATA()
+        dt.setData(self.data.X, self.data.Y)
+        try:
+            _min = int(dialog.lineEdit_min.text())
+        except ValueError:
+            self.statusbar.showMessage("Wrong value...setting to default", 3000)
+        try:
+            _max = int(dialog.lineEdit_max.text())
+        except ValueError:
+            self.statusbar.showMessage("Wrong value...setting to default", 3000)
+        if self.limit_low != 0:
+            self.limit_low.remove()
+            self.limit_high.remove()
+            self.baseline.remove()
+        self.limit_low,  = self.subplot.plot([_min, _min], [np.min(self.data.Y), np.max(self.data.Y)], color = 'red', label = 'Exclude region')
+        self.limit_high, = self.subplot.plot([_max, _max], [np.min(self.data.Y), np.max(self.data.Y)], color = 'red')
+
+        peakLimits = Limits(_min, _max)
+        dt.fitBaseline(dialog.spinBox.value(), peakLimits)
+        self.baseline, = self.subplot.plot(dt.X, dt.baseline, 'r--', label = "Baseline")
+        self.subplot.legend()
+        self.canvas.draw()
+
 
 
 
@@ -213,7 +296,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         if len(self.config.read(path+'/config/config.ini')):
                self.degree = int(self.config['DEFAULT']['degree'])
                self.initialDir = self.config['USER_CONFIGS']['directory']
-        #        thrsh = float(config['DEFAULT']['threshold'])
+               self.threshold = float(self.config['DEFAULT']['threshold'])
         #        font_size = int(config['DEFAULT']['font_size'])
         #        dataLimits = Limits(int(config['LIMITS']['low']), int(config['LIMITS']['high']))
                self.peakLimits = Limits(int(self.config['PEAK']['low']), int(self.config['PEAK']['high']))
@@ -287,14 +370,15 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         if clear:
             self.subplot.clear()
         if label == 'Baseline':
-            self.subplot.plot(X, Y, 'r--', label = label)
+            line, = self.subplot.plot(X, Y, 'r--', label = label)
         else:
-            self.subplot.plot(X, Y, label = label)
+            line, = self.subplot.plot(X, Y, label = label)
         self.subplot.set_xlim(np.min(X), np.max(X))
-        if label == 'Experimental data':
+        if label in ['Experimental data', 'Baseline corrected data']:
             self.subplot.set_ylim(0.9*np.min(Y), 1.1*np.max(Y))
         self.subplot.legend()
         self.plotAdjust()
+        return line
 
     def errorBox(self, message, title):
         self.statusbar.showMessage(message, 5000)
@@ -325,6 +409,10 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.data.crop(_min, _max)
         self.statusbar.showMessage("Data cropped", 3000)
         self.Plot(self.data.X, self.data.Y, "Experimental data")
+        if self.peakLimits.min < self.data.X[0]:
+            self.peakLimits.min = self.data.X[0]
+        if self.peakLimits.max > self.data.X[-1]:
+            self.peakLimits.max = self.data.X[-1]
         if not self.changed:
             self.changed = True
             self.setWindowTitle(self.windowTitle()+'*')
