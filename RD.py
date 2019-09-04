@@ -78,7 +78,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.limit_low, self.limit_high = 0, 0 #exclude region
         self.baseline = 0
 
-        # self.actionQuit.triggered.connect(self.close)
+        self.actionQuit.triggered.connect(self.close)
         self.actionAbout.triggered.connect(self.about)
         self.actionGuess.triggered.connect(lambda: [self.dockGuess.setVisible(self.actionGuess.isChecked()),
                                                     self.dockGuess.raise_()])
@@ -88,8 +88,10 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.dockOut.visibilityChanged.connect(self.actionOutput.setChecked)
         self.actionToolbar.triggered.connect(self.toolBar.toggleViewAction().trigger)
         self.actionNew.triggered.connect(self.New)
+        self.actionSave.triggered.connect(self.Save)
         self.actionCrop.triggered.connect(self.Crop)
         self.actionRemove_Baseline.triggered.connect(self.Baseline)
+        self.actionSpike_Removal.triggered.connect(self.removeSpikes)
         self.tabifyDockWidget(self.dockGuess, self.dockOut)
         self.dockGuess.raise_()
         self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
@@ -129,6 +131,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         actionCrop.triggered.connect(self.Crop)
         actionBaseline.triggered.connect(self.Baseline)
         actionSpike.triggered.connect(self.removeSpikes)
+        actionSave.triggered.connect(self.Save)
 
         self.startUp()
 
@@ -365,6 +368,34 @@ class RD(QMainWindow, gui.Ui_MainWindow):
             self.errorBox('Could not load the file', 'I/O error')
             self.statusbar.showMessage("Error loading the file", 2000)
 
+    def Save(self):
+        if not np.shape(self.data.X):
+            self.statusbar.showMessage("No data...", 2000)
+            return
+        path = self.initialDir
+        fname, _filter = QFileDialog.getSaveFileName(self, 'Save file', path,"Text files (*.txt);; Comma separated values (*.csv)")
+        delimiter = '\t'
+        if not fname:
+            return
+        if _filter == "Text files (*.txt)" and fname[-3:]!='txt':
+            fname += '.txt'
+        if _filter == "Comma separated values (*.csv)" and fname[-3:]!='csv':
+            fname += '.csv'
+            delimiter = ','
+
+        data, comments = self.data.getData()
+        f = open(fname, 'w')
+        f.close()
+        with open(fname, 'a') as f:
+            [f.write(s) for s in comments]
+            data.to_csv(f, index = None, sep = delimiter)
+
+        self.statusbar.showMessage('File {} saved'.format(fname), 2000)
+
+
+        if self.changed:
+            self.changed =False
+            self.setWindowTitle(self.windowTitle()[:-1])
 
     def Plot(self, X, Y, label, clear = True):
         if clear:
@@ -408,7 +439,10 @@ class RD(QMainWindow, gui.Ui_MainWindow):
             self.statusbar.showMessage("Wrong value...setting to default", 3000)
         self.data.crop(_min, _max)
         self.statusbar.showMessage("Data cropped", 3000)
-        self.Plot(self.data.X, self.data.Y, "Experimental data")
+        if np.shape(self.data.noBaseline):
+            self.Plot(self.data.X, self.data.noBaseline, "Baseline corrected data")
+        else:
+            self.Plot(self.data.X, self.data.Y, "Experimental data")
         if self.peakLimits.min < self.data.X[0]:
             self.peakLimits.min = self.data.X[0]
         if self.peakLimits.max > self.data.X[-1]:
@@ -451,24 +485,20 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
 
-    def close(self):
-        result = QMessageBox.question(self,
-                "Confirm Exit...",
-                "Are you sure you want to exit?",
-                QMessageBox.Yes| QMessageBox.No)
-        if result == QMessageBox.Yes:
-            QApplication.exit()
+    def closeEvent(self, event):
+        if self.changed:
+            result = QMessageBox.question(self,
+                    "Unsaved file...",
+                    "Do you want to save the data before exiting?",
+                    QMessageBox.Yes| QMessageBox.No |QMessageBox.Cancel)
+            if result == QMessageBox.Yes:
+                self.Save()
+                event.ignore()
+            elif result == QMessageBox.Cancel:
+                event.ignore()
+            else:
+                event.accept()
 
-
-    # def closeEvent(self, event):
-    #     result = QMessageBox.question(self,
-    #             "Confirm Exit...",
-    #             "Are you sure you want to exit?",
-    #             QMessageBox.Yes| QMessageBox.No)
-    #     if result == QMessageBox.Yes:
-    #         event.accept()
-    #     else:
-    #         event.ignore()
 
 if __name__ == '__main__':
     app = QApplication([sys.argv])

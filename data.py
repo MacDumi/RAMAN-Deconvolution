@@ -32,9 +32,25 @@ class DATA:
                                 return
                         self.X = dt[:,0]
                         self.Y = dt[:,1]
+
         def setData(self, X, Y):
                 self.X =X
                 self.Y=Y
+
+        def getData(self):
+            data = pd.DataFrame()
+            data['Raman shift'] = self.X
+            data['Raw intensity'] = self.Y
+            comments = []
+            if np.shape(self.noBaseline):
+                data['Baseline'] = self.baseline
+                data['Baseline corrected'] = self.noBaseline
+
+                comments = '#Polynomial fit -- degree: {}\n'.format(self.bsDegree)
+                comments = np.append(comments, '#Fitting coefficients (high to low):\n#')
+                coefficients = ['{:.4E}  'for coef in self.bsCoef]
+                comments = np.append(comments, ''.join(coefficients).format(*self.bsCoef)+'\n')
+            return data, comments
 
         def crop(self, _min, _max):
             min_ = np.argwhere(self.X>int(_min))[0][0]
