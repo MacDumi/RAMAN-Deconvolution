@@ -90,6 +90,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.canvas = FigureCanvas(self.figure)
         self.canvas.setFocusPolicy(Qt.ClickFocus )
         self.canvas.setFocus()
+        self.canvas.mpl_connect('button_press_event', self.onclick)
         self.toolbar = NavigationToolbar(self.canvas, self)
         self.gridLayout.addWidget(self.toolbar)
         self.gridLayout.addWidget(self.canvas)
@@ -122,7 +123,8 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         Y1 = FIT.lorents(X, 1800, 1358, 110)
         Y2 = FIT.lorents(X, 1700, 1590, 50)
         self.subplot.plot(X, (Y1+Y2)+20*np.random.randn(len(X)), 'o')
-        self.subplot.plot(X, Y1+Y2, 'r--')
+        self.subplot.plot(X, Y1+Y2, 'r--', label = 'Sample data')
+        self.subplot.legend()
         self.subplot.plot(X, Y1)
         self.subplot.plot(X, Y2)
         self.subplot.set_xlim(np.min(X), np.max(X))
@@ -132,6 +134,30 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.subplot.set_xlabel(r'$\mathbf{Raman\ shift,\ cm^{-1}}$')
         self.subplot.set_ylabel(r'$\mathbf{Intensty}$')
         self.canvas.draw()
+
+    #right click on the plot
+    def onclick(self, event):
+        if len(self.data.X):
+            if event.button == 3:  #right click
+                self.listMenu= QMenu()
+                menu_item_0 = self.listMenu.addAction("Delete datapoint (spike)")
+                idx = np.abs(self.data.X - event.xdata).argmin()
+                self.statusbar.showMessage('Datapoint selected: X = %f, Y = %f' %(self.data.X[idx], self.data.Y[idx]), 1000)
+                spike, = self.subplot.plot(self.data.X[idx], self.data.Y[idx], 'ro')
+                self.canvas.draw()
+                cursor = QCursor()
+                menu_item_0.triggered.connect(lambda: self.deleteSpike(idx))
+                self.listMenu.move(cursor.pos() )
+                self.listMenu.show()
+                self.listMenu.aboutToHide.connect(lambda : [spike.remove(), self.canvas.draw()])
+
+    def deleteSpike(self, x):
+        self.statusbar.showMessage('Spike deleted: X = %f, Y = %f' %(self.data.X[x], self.data.Y[x]), 1000)
+        self.data.X = np.delete(self.data.X, x)
+        self.data.Y = np.delete(self.data.Y, x)
+        self.Plot(self.data.X, self.data.Y, "Experimental data", clear=True)
+
+
 
     def Baseline(self):
         if not np.shape(self.data.X):
@@ -183,13 +209,14 @@ class RD(QMainWindow, gui.Ui_MainWindow):
     def readConfig(self):
         path =os.path.dirname(os.path.realpath(__file__))
         #read the configuration file
-        config = configparser.ConfigParser()
-        if len(config.read(path+'/config/config.ini')):
-               self.degree = int(config['DEFAULT']['degree'])
+        self.config = configparser.ConfigParser()
+        if len(self.config.read(path+'/config/config.ini')):
+               self.degree = int(self.config['DEFAULT']['degree'])
+               self.initialDir = self.config['USER_CONFIGS']['directory']
         #        thrsh = float(config['DEFAULT']['threshold'])
         #        font_size = int(config['DEFAULT']['font_size'])
         #        dataLimits = Limits(int(config['LIMITS']['low']), int(config['LIMITS']['high']))
-               self.peakLimits = Limits(int(config['PEAK']['low']), int(config['PEAK']['high']))
+               self.peakLimits = Limits(int(self.config['PEAK']['low']), int(self.config['PEAK']['high']))
         #        dark = bool(int(config['DEFAULT']['dark']))
         #        if bool(int(config['SKIP_REGION']['skip'])):
         #                skipRegion = Limits(int(config['SKIP_REGION']['low']), int(config['SKIP_REGION']['high']))
@@ -223,20 +250,29 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         except FileNotFoundError:
             elf.Error('Initial parameters were not loaded', 'File not found')
 
+    def updateConfig (self, key, value, string):
+        self.config.set(key, value, string)
+        #Save the new config file
+        path =os.path.dirname(os.path.realpath(__file__))
+        with open(path + '/config/config.ini', 'w') as configfile:
+            self.config.write(configfile)
+        self.statusbar.showMessage("Configuration file updated", 2000)
+
     def New(self):
         path = self.initialDir
         fname, _filter = QFileDialog.getOpenFileName(self, 'Open file', path,"Text files (*.txt *.dat);; Wire data files (*.wdf);; All files (*.*)")
         if not fname:
             return
-        else:
+        elif self.initialDir!=ntpath.dirname(fname):
             self.initialDir=ntpath.dirname(fname) #update the initial directory for the Open/Save dialog
+            self.updateConfig('USER_CONFIGS', 'directory', self.initialDir)
         if fname[-3:] == 'wdf':
             convert(fname)
             fname = fname[:-3]+'txt'
         try:
             tmp = np.loadtxt(fname)
             self.data.setData(tmp[:,0], tmp[:,1])
-            self.statusbar.showMessage("Data loaded", 2000)
+            # self.statusbar.showMessage("Data loaded", 2000)
             self.Plot(self.data.X, self.data.Y, 'Experimental data')
             self.setWindowTitle( 'Raman Deconvolution - ' + ntpath.basename(fname))
             self.changed = False

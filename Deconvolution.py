@@ -236,9 +236,9 @@ def prepareInput(path):
         data.loadData(path) #load the data
         data.setLimits(dataLimits) #set data limits
         if _abs:
-                data.fitBaseline(degree, peakLimits, skipRegion, abs=_abs) #fit the baseline (first time)
+            data.fitBaseline(degree, peakLimits, abs=_abs) #fit the baseline (first time)
         else:
-                data.fitBaseline(degree, peakLimits, skipRegion) #fit the baseline (first time)
+                data.fitBaseline(degree, peakLimits) #fit the baseline (first time)
 
 def wrapper(parameters, nr, name):
         data = DATA()

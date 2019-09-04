@@ -106,9 +106,9 @@ class DATA:
                 ax.plot(self.X, self.baseline, 'r--', label = 'Baseline')
                 ax.plot([self.limits.min, self.limits.min], [min(self.Y), max(self.Y)], 'r-')
                 ax.plot([self.limits.max,self.limits.max],[min(self.Y), max(self.Y)], 'r-', label='Excluded region')
-                if self.skip:
-                        ax.plot([self.skip.min, self.skip.min], [min(self.Y), max(self.Y)], 'y-')
-                        ax.plot([self.skip.max, self.skip.max], [min(self.Y), max(self.Y)], 'y-', label = 'Second excluded region')
+                # if self.skip:
+                #         ax.plot([self.skip.min, self.skip.min], [min(self.Y), max(self.Y)], 'y-')
+                #         ax.plot([self.skip.max, self.skip.max], [min(self.Y), max(self.Y)], 'y-', label = 'Second excluded region')
                 ax.set_ylabel("Intensity")
                 ax.set_xlabel("Raman shift, $cm^{-1}$")
                 plt.legend()
