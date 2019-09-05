@@ -30,7 +30,7 @@ class SmoothDialog (QDialog, smooth_dialog.Ui_Dialog):
         super(SmoothDialog, self).__init__()
         self.setupUi(self)
         self.setFixedSize(self.size())
-        self.slider.valueChanged.connect(lambda : self.lb_value.setText("%d"%self.slider.value()))
+        self.slider.valueChanged.connect(lambda : self.lb_value.setText("%d"%int(2*self.slider.value()+1)))
 
 "Spike dialog"
 class SpikeDialog (QDialog, spike_dialog.Ui_Dialog):
@@ -103,6 +103,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.actionCrop.triggered.connect(self.Crop)
         self.actionRemove_Baseline.triggered.connect(self.Baseline)
         self.actionSpike_Removal.triggered.connect(self.removeSpikes)
+        self.actionSmoothing.triggered.connect(self.Smoothing)
         self.tabifyDockWidget(self.dockGuess, self.dockOut)
         self.dockGuess.raise_()
         self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
@@ -114,6 +115,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.spikeDialog.slider.sliderReleased.connect(self.showSpikes)
 
         self.smoothDialog = SmoothDialog()
+        self.smoothDialog.slider.sliderReleased.connect(self.previewSmoothed)
 
         self.figure = plt.figure()
         self.figure.set_tight_layout(True)
@@ -188,7 +190,46 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.Plot(self.data.X, self.data.Y, "Experimental data", clear=True)
 
     def Smoothing(self):
+        if not np.shape(self.data.X):
+            self.errorBox('There is no data', 'No data...')
+            return
+        self.previewSmoothed()
         result = self.smoothDialog.exec_()
+        self.baseline.remove()
+        self.baseline = 0
+        if not result:
+            self.subplot.legend()
+            self.canvas.draw()
+            return
+        if np.shape(self.data.noBaseline):
+            y_ = self.data.noBaseline
+        else:
+            y_ = self.data.Y
+        y_ = self.data.smooth(y_, 2*self.smoothDialog.slider.value()+1)
+        if np.shape(self.data.noBaseline):
+            self.data.noBaseline = y_
+        else:
+            self.data.Y = y_
+        self.Plot(self.data.X, y_, "Smoothed data")
+        self.plotAdjust()
+        if not self.changed:
+            self.changed = True
+            self.setWindowTitle(self.windowTitle()+'*')
+
+
+    def previewSmoothed(self):
+        if np.shape(self.data.noBaseline):
+            y_ = self.data.noBaseline
+        else:
+            y_ = self.data.Y
+        y_ = self.data.smooth(y_, 2*self.smoothDialog.slider.value()+1)
+        if self.baseline != 0:
+            self.baseline.remove()
+        self.baseline,  = self.subplot.plot(self.data.X, y_, 'r--', label = 'Smoothed data')
+        self.subplot.legend()
+        self.canvas.draw()
+        return y_
+
 
 
     def showSpikes(self):
@@ -202,7 +243,6 @@ class RD(QMainWindow, gui.Ui_MainWindow):
             self.spike, = self.subplot.plot(self.data.X[sp], self.data.Y[sp], 'ro', label = 'Spikes')
             self.subplot.legend()
             self.canvas.draw()
-
 
     def plotAdjust(self):
         self.subplot.set_xlabel(r'$\mathbf{Raman\ shift,\ cm^{-1}}$')
@@ -232,8 +272,6 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.data.removeSpikes()
         self.Plot(self.data.X, self.data.Y, "Experimental data")
 
-
-
     def Baseline(self):
         if not np.shape(self.data.X):
             self.errorBox('There is no data', 'No data...')
@@ -244,12 +282,12 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         dialog.btPreview.clicked.connect(lambda: self.previewBaseline(dialog))
         self.previewBaseline(dialog)
         result = dialog.exec_()
+        self.limit_low.remove()
+        self.limit_high.remove()
+        self.baseline.remove()
+        self.limit_low, self.limit_high = 0, 0
+        self.baseline = 0
         if not result:
-            self.limit_low.remove()
-            self.limit_high.remove()
-            self.baseline.remove()
-            self.limit_low, self.limit_high = 0, 0
-            self.baseline = 0
             self.subplot.legend()
             self.canvas.draw()
             return
@@ -293,7 +331,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
             _max = int(dialog.lineEdit_max.text())
         except ValueError:
             self.statusbar.showMessage("Wrong value...setting to default", 3000)
-        if self.limit_low != 0:
+        if self.baseline != 0:
             self.limit_low.remove()
             self.limit_high.remove()
             self.baseline.remove()
@@ -424,7 +462,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         else:
             line, = self.subplot.plot(X, Y, label = label)
         self.subplot.set_xlim(np.min(X), np.max(X))
-        if label in ['Experimental data', 'Baseline corrected data']:
+        if label in ['Experimental data', 'Baseline corrected data', 'Smoothed data']:
             self.subplot.set_ylim(0.9*np.min(Y), 1.1*np.max(Y))
         self.subplot.legend()
         self.plotAdjust()

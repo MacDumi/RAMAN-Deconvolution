@@ -5,6 +5,7 @@ Class dealing with the Raman data
 import numpy as np
 import matplotlib
 matplotlib.use('Qt5Agg')
+from scipy.signal import savgol_filter
 import matplotlib.pyplot as plt
 from convertwdf import *
 
@@ -12,13 +13,7 @@ class DATA:
         def __init__(self):
                 #constructor
                 super(DATA, self).__init__()
-                self.X = 0
-                self.Y = 0
-                self.baseline = 0
-                self.noBaseline =0
-                self.bsDegree = 0
-                self.bsCoef = 0
-                self.spikes=[]
+                self.setData(0, 0)
 
         def loadData(self, path):
                 #load data
@@ -34,8 +29,17 @@ class DATA:
                         self.Y = dt[:,1]
 
         def setData(self, X, Y):
-                self.X =X
-                self.Y=Y
+                self.X = X
+                self.Y = Y
+                self.baseline = 0
+                self.noBaseline =0
+                self.bsDegree = 0
+                self.bsCoef = 0
+                self.spikes=[]
+                self.prev = 0
+
+        def smooth(self, Y, window):
+            return savgol_filter(Y, window, 3)
 
         def getData(self):
             data = pd.DataFrame()
