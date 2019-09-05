@@ -11,6 +11,7 @@ import gui
 import crop_dialog
 import baseline_dialog
 import spike_dialog
+import smooth_dialog
 from fit import FIT
 from data import DATA
 from convertwdf import *
@@ -22,6 +23,14 @@ from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
 
 Limits = recordtype('Limits', ['min', 'max'])
+
+"Smooth dialog"
+class SmoothDialog (QDialog, smooth_dialog.Ui_Dialog):
+    def __init__(self):
+        super(SmoothDialog, self).__init__()
+        self.setupUi(self)
+        self.setFixedSize(self.size())
+        self.slider.valueChanged.connect(lambda : self.lb_value.setText("%d"%self.slider.value()))
 
 "Spike dialog"
 class SpikeDialog (QDialog, spike_dialog.Ui_Dialog):
@@ -38,6 +47,7 @@ class CropDialog (QDialog, crop_dialog.Ui_Dialog):
     def __init__(self, _min, _max):
         super(CropDialog, self).__init__()
         self.setupUi(self)
+        self.setFixedSize(self.size())
         self.lbl_min.setText("%d"%_min)
         self.lbl_max.setText("%d"%_max)
         self.lineEdit_min.setFocus()
@@ -52,6 +62,7 @@ class BaselineDialog(QDialog, baseline_dialog.Ui_Dialog):
     def __init__(self, _deg, _min, _max):
         super(BaselineDialog, self).__init__()
         self.setupUi(self)
+        self.setFixedSize(self.size())
         self.spinBox.setValue(_deg)
         self.lineEdit_min.setText(str(_min))
         self.lineEdit_max.setText(str(_max))
@@ -102,6 +113,8 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.spikeDialog = SpikeDialog(self.threshold)
         self.spikeDialog.slider.sliderReleased.connect(self.showSpikes)
 
+        self.smoothDialog = SmoothDialog()
+
         self.figure = plt.figure()
         self.figure.set_tight_layout(True)
         self.subplot = self.figure.add_subplot(111) #add a subfigure
@@ -118,6 +131,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         actionSave  = QAction(QIcon("graphics/save.png"),"Save",self)
         actionCrop  = QAction(QIcon("graphics/crop.png"),"Crop",self)
         actionSpike = QAction(QIcon("graphics/spike.png"),"Spike removal",self)
+        actionSmooth = QAction(QIcon("graphics/smooth.png"),"Smoothing",self)
         actionBaseline = QAction(QIcon("graphics/baseline.png"),"Remove baseline",self)
         self.toolBar.addAction(actionOpen)
         self.toolBar.addAction(actionSave)
@@ -125,6 +139,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.toolBar.addAction(actionCrop)
         self.toolBar.addAction(actionBaseline)
         self.toolBar.addAction(actionSpike)
+        self.toolBar.addAction(actionSmooth)
         self.toolBar.addSeparator()
         self.toolBar.toggleViewAction().setChecked(True)
         actionOpen.triggered.connect(self.New)
@@ -132,6 +147,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         actionBaseline.triggered.connect(self.Baseline)
         actionSpike.triggered.connect(self.removeSpikes)
         actionSave.triggered.connect(self.Save)
+        actionSmooth.triggered.connect(self.Smoothing)
 
         self.startUp()
 
@@ -170,6 +186,9 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.data.removeSpikes()
         self.statusbar.showMessage("%d datapoints removed" %len(self.data.spikes), 2000)
         self.Plot(self.data.X, self.data.Y, "Experimental data", clear=True)
+
+    def Smoothing(self):
+        result = self.smoothDialog.exec_()
 
 
     def showSpikes(self):
