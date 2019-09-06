@@ -81,7 +81,8 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         super(RD, self).__init__()
         self.setupUi(self)
         #variables
-        self.initialDir = '/home/cat/'
+        self.settings = QSettings("Raman Deconvolution", "settings")
+        self.initialDir = self.settings.value('directory', '/home/cat/')
         self.data = DATA()
         self.changed = False
         self.peaksLimits = Limits(900, 1850)
@@ -95,6 +96,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
                                                     self.dockGuess.raise_()])
         self.actionOutput.triggered.connect(lambda: [self.dockOut.setVisible(self.actionOutput.isChecked()),
                                                     self.dockOut.raise_()])
+        self.toolBar.setObjectName('toolbar')
         self.dockGuess.visibilityChanged.connect(self.actionGuess.setChecked)
         self.dockOut.visibilityChanged.connect(self.actionOutput.setChecked)
         self.actionToolbar.triggered.connect(self.toolBar.toggleViewAction().trigger)
@@ -188,6 +190,9 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.data.removeSpikes()
         self.statusbar.showMessage("%d datapoints removed" %len(self.data.spikes), 2000)
         self.Plot(self.data.X, self.data.Y, "Experimental data", clear=True)
+        if not self.changed:
+            self.changed = True
+            self.setWindowTitle(self.windowTitle()+'*')
 
     def Smoothing(self):
         if not np.shape(self.data.X):
@@ -271,6 +276,9 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.data.spikes = x
         self.data.removeSpikes()
         self.Plot(self.data.X, self.data.Y, "Experimental data")
+        if not self.changed:
+            self.changed = True
+            self.setWindowTitle(self.windowTitle()+'*')
 
     def Baseline(self):
         if not np.shape(self.data.X):
@@ -344,18 +352,13 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.subplot.legend()
         self.canvas.draw()
 
-
-
-
-
-
     def readConfig(self):
         path =os.path.dirname(os.path.realpath(__file__))
         #read the configuration file
         self.config = configparser.ConfigParser()
         if len(self.config.read(path+'/config/config.ini')):
                self.degree = int(self.config['DEFAULT']['degree'])
-               self.initialDir = self.config['USER_CONFIGS']['directory']
+               # self.initialDir = self.config['USER_CONFIGS']['directory']
                self.threshold = float(self.config['DEFAULT']['threshold'])
         #        font_size = int(config['DEFAULT']['font_size'])
         #        dataLimits = Limits(int(config['LIMITS']['low']), int(config['LIMITS']['high']))
@@ -402,13 +405,22 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.statusbar.showMessage("Configuration file updated", 2000)
 
     def New(self):
+        if self.changed:
+            result = QMessageBox.question(self,
+                    "Unsaved file...",
+                    "Do you want to save the data before exiting?",
+                    QMessageBox.Yes| QMessageBox.No |QMessageBox.Cancel)
+            if result == QMessageBox.Yes:
+                self.Save()
+            elif result == QMessageBox.Cancel:
+                return
         path = self.initialDir
         fname, _filter = QFileDialog.getOpenFileName(self, 'Open file', path,"Text files (*.txt *.dat);; Wire data files (*.wdf);; All files (*.*)")
         if not fname:
             return
         elif self.initialDir!=ntpath.dirname(fname):
             self.initialDir=ntpath.dirname(fname) #update the initial directory for the Open/Save dialog
-            self.updateConfig('USER_CONFIGS', 'directory', self.initialDir)
+            self.settings.setValue('directory', self.initialDir)
         if fname[-3:] == 'wdf':
             convert(fname)
             fname = fname[:-3]+'txt'
