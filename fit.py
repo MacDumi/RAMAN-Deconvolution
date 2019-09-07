@@ -109,6 +109,7 @@ class FIT:
                 sigma[np.abs(data.X-1600)<50]=0.7
                 sigma[np.abs(data.X-900)<100]=0.9
                 sigma[np.abs(data.X-1750)<100]=0.9
+
                 try:
                     #Fit
                     self.pars, pcov = curve_fit(self.model, data.X, data.noBaseline, parguess, sigma=sigma, bounds = bounds)
@@ -127,6 +128,9 @@ class FIT:
                     if not batch:
                         print('Failed to deconvolute...\nTry with a different initial guess')
                         # os._exit(0)
+                except ValueError:
+                    if not batch:
+                        print('Failed to deconvolute...\nTry with different bounds')
 
         def plot(self, *args):
                 #plot overlapping peaks with or without the baseline

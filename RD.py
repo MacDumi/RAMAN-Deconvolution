@@ -19,6 +19,7 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from recordtype import recordtype
+from distutils.util import strtobool
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
 
@@ -81,9 +82,8 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         super(RD, self).__init__()
         self.setupUi(self)
         #variables
-        self.settings = QSettings("Raman Deconvolution", "settings")
-        self.initialDir = self.settings.value('directory', '/home/cat/')
         self.data = DATA()
+        self.fit = 0
         self.changed = False
         self.peaksLimits = Limits(900, 1850)
         self.spike = 0 #scatter plot for spikes
@@ -96,7 +96,6 @@ class RD(QMainWindow, gui.Ui_MainWindow):
                                                     self.dockGuess.raise_()])
         self.actionOutput.triggered.connect(lambda: [self.dockOut.setVisible(self.actionOutput.isChecked()),
                                                     self.dockOut.raise_()])
-        self.toolBar.setObjectName('toolbar')
         self.dockGuess.visibilityChanged.connect(self.actionGuess.setChecked)
         self.dockOut.visibilityChanged.connect(self.actionOutput.setChecked)
         self.actionToolbar.triggered.connect(self.toolBar.toggleViewAction().trigger)
@@ -106,12 +105,13 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.actionRemove_Baseline.triggered.connect(self.Baseline)
         self.actionSpike_Removal.triggered.connect(self.removeSpikes)
         self.actionSmoothing.triggered.connect(self.Smoothing)
+        self.actionDeconvolute.triggered.connect(self.Deconvolution)
         self.tabifyDockWidget(self.dockGuess, self.dockOut)
-        self.dockGuess.raise_()
         self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.textOut.setReadOnly(True)
         self.textOut.setText(self.header)
         self.readConfig()
+
 
         self.spikeDialog = SpikeDialog(self.threshold)
         self.spikeDialog.slider.sliderReleased.connect(self.showSpikes)
@@ -134,9 +134,10 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         actionOpen  = QAction(QIcon("graphics/open.png"),"Open",self)
         actionSave  = QAction(QIcon("graphics/save.png"),"Save",self)
         actionCrop  = QAction(QIcon("graphics/crop.png"),"Crop",self)
-        actionSpike = QAction(QIcon("graphics/spike.png"),"Spike removal",self)
-        actionSmooth = QAction(QIcon("graphics/smooth.png"),"Smoothing",self)
+        actionSpike = QAction(QIcon("graphics/spike.svg"),"Spike removal",self)
+        actionSmooth = QAction(QIcon("graphics/smooth.svg"),"Smoothing",self)
         actionBaseline = QAction(QIcon("graphics/baseline.png"),"Remove baseline",self)
+        actionDeconv = QAction(QIcon("graphics/deconv.svg"),"Deconvolution",self)
         self.toolBar.addAction(actionOpen)
         self.toolBar.addAction(actionSave)
         self.toolBar.addSeparator()
@@ -145,13 +146,16 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.toolBar.addAction(actionSpike)
         self.toolBar.addAction(actionSmooth)
         self.toolBar.addSeparator()
-        self.toolBar.toggleViewAction().setChecked(True)
+        self.toolBar.addAction(actionDeconv)
+        self.toolBar.addSeparator()
+        self.toolBar.toggleViewAction().setChecked(self.actionToolbar.isChecked())
         actionOpen.triggered.connect(self.New)
         actionCrop.triggered.connect(self.Crop)
         actionBaseline.triggered.connect(self.Baseline)
         actionSpike.triggered.connect(self.removeSpikes)
         actionSave.triggered.connect(self.Save)
         actionSmooth.triggered.connect(self.Smoothing)
+        actionDeconv.triggered.connect(self.Deconvolution)
 
         self.startUp()
 
@@ -235,6 +239,37 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.canvas.draw()
         return y_
 
+    def Deconvolution(self):
+        if not np.shape(self.data.X):
+            self.errorBox('There is no data', 'No data...')
+            return
+        if not np.shape(self.data.noBaseline):
+            result = QMessageBox.question(self,
+                    "Baseline...",
+                    "The baseline is still present!\nWould you like to remove it first?",
+                    QMessageBox.Yes| QMessageBox.No)
+            if result == QMessageBox.Yes:
+                self.Baseline()
+            else:
+                return
+        rows = self.tableWidget.rowCount()
+        cols = self.tableWidget.columnCount()
+        params = pd.DataFrame(columns = ['lb', 'pos', 'pos_min', 'pos_max',  'int', 'width', 'shape'])
+        for row in range(rows):
+            if self.tableWidget.item(row, 1).flags() & Qt.ItemIsEnabled:
+                d =[self.tableWidget.item(row, col).text() for col in range(1, cols)]
+                params = params.append({'lb': d[0],  'pos' : d[1], 'pos_min' : d[2],
+                    'pos_max' : d[3], 'int' : d[4], 'width' : d[5], 'shape' : d[6]}, ignore_index =True)
+        print(params)
+        self.fit = FIT(params['shape'], params['lb'])
+        parguess = np.concatenate([[params['int'][i], params['width'][i], params['pos'][i]]
+                    for i in range(len(params['lb'])) ]).astype(float)
+        lower = np.concatenate([[10, 10, params['pos_min'][i]] for i in range(len(params['lb'])) ]).astype(float)
+        upper = np.concatenate([[float('inf'), float('inf'), params['pos_max'][i]] for i in range(len(params['lb'])) ]).astype(float)
+        self.fit.deconvolute(self.data, parguess, [lower, upper], False)
+        self.textOut.append(self.fit.report)
+        self.dockOut.raise_()
+
 
 
     def showSpikes(self):
@@ -312,6 +347,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.data.fitBaseline(params[1], self.peakLimits)
         self.Plot(self.data.X, self.data.noBaseline, "Baseline corrected data")
         self.plotAdjust()
+        self.dockOut.setVisible(True)
         self.textOut.clear()
         self.textOut.append('                  BASELINE FIT                   ')
         self.textOut.append('*************************************************')
@@ -353,35 +389,25 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.canvas.draw()
 
     def readConfig(self):
+
+        self.settings = QSettings("Raman Deconvolution")
+        self.initialDir = self.settings.value('directory', '/home/cat/')
+        self.restoreGeometry(self.settings.value('MainWindow/geometry', self.saveGeometry()))
+        self.restoreState(self.settings.value('MainWindow/state', self.saveState()))
+        self.actionToolbar.setChecked(strtobool(self.settings.value('MainWindow/toolbar', 'true')))
+        self.actionGuess.setChecked(strtobool(self.settings.value('MainWindow/dockGuess', 'true')))
+        self.actionOutput.setChecked(strtobool(self.settings.value('MainWindow/dockOut', 'true')))
+        self.dockGuess.setVisible(self.actionGuess.isChecked())
+        self.dockOut.setVisible(self.actionOutput.isChecked())
+
         path =os.path.dirname(os.path.realpath(__file__))
         #read the configuration file
         self.config = configparser.ConfigParser()
         if len(self.config.read(path+'/config/config.ini')):
                self.degree = int(self.config['DEFAULT']['degree'])
-               # self.initialDir = self.config['USER_CONFIGS']['directory']
                self.threshold = float(self.config['DEFAULT']['threshold'])
         #        font_size = int(config['DEFAULT']['font_size'])
-        #        dataLimits = Limits(int(config['LIMITS']['low']), int(config['LIMITS']['high']))
                self.peakLimits = Limits(int(self.config['PEAK']['low']), int(self.config['PEAK']['high']))
-        #        dark = bool(int(config['DEFAULT']['dark']))
-        #        if bool(int(config['SKIP_REGION']['skip'])):
-        #                skipRegion = Limits(int(config['SKIP_REGION']['low']), int(config['SKIP_REGION']['high']))
-        #                if skipRegion.max > dataLimits.max:
-        #                        skipRegion.max = dataLimits.max
-        #                if skipRegion.min > dataLimits.max:
-        #                        skipRegion.min = dataLimits.max
-        #                if skipRegion.max < dataLimits.min:
-        #                        skipRegion.min = dataLimits.min
-        #                if skipRegion.min < dataLimits.min:
-        #                        skipRegion.min = dataLimits.min
-        #        else:
-        #                skipRegion = 0
-        #        _abs = bool(int(config['DEFAULT']['abs']))
-        #else:
-        #        #load the defaults
-        #        print('Could not find the config file...\nLoading defaults')
-        #matplotlib.rcParams.update({'font.size': font_size})
-
         #load fitting parameters
         try:
             parameters = pd.read_csv(path+'/config/initialData.csv')
@@ -395,14 +421,6 @@ class RD(QMainWindow, gui.Ui_MainWindow):
             self.statusbar.showMessage("Initial parameters were loaded", 2000)
         except FileNotFoundError:
             elf.Error('Initial parameters were not loaded', 'File not found')
-
-    def updateConfig (self, key, value, string):
-        self.config.set(key, value, string)
-        #Save the new config file
-        path =os.path.dirname(os.path.realpath(__file__))
-        with open(path + '/config/config.ini', 'w') as configfile:
-            self.config.write(configfile)
-        self.statusbar.showMessage("Configuration file updated", 2000)
 
     def New(self):
         if self.changed:
@@ -522,7 +540,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
 
     def tableItemRightClicked(self, QPos):
         self.listMenu= QMenu()
-        if self.tableWidget.item(self.tableWidget.currentRow(), 0).flags() & Qt.ItemIsEnabled:
+        if self.tableWidget.item(self.tableWidget.currentRow(), 1).flags() & Qt.ItemIsEnabled:
             menu_item_0 = self.listMenu.addAction("Don't use for deconvolution")
         else:
             menu_item_0 = self.listMenu.addAction("Use for deconvolution")
@@ -535,14 +553,16 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.listMenu.show()
 
     def tableUseAll(self):
-        for row in np.arange(0, self.tableWidget.rowCount()):
-            self.tableWidget.item(row,0).setFlags(Qt.ItemIsEnabled)
+        cols = self.tableWidget.columnCount()
+        for row in np.arange(1, self.tableWidget.rowCount()):
+            [self.tableWidget.item(row,col).setFlags(Qt.ItemIsEnabled) for col in range(1, cols)]
 
     def tableRowUse(self, row):
-        if self.tableWidget.item(row, 0).flags() & Qt.ItemIsEnabled:
-            self.tableWidget.item(row,0).setFlags(Qt.NoItemFlags)
+        cols = self.tableWidget.columnCount()
+        if self.tableWidget.item(row, 1).flags() & Qt.ItemIsEnabled:
+            [self.tableWidget.item(row, col).setFlags(Qt.NoItemFlags) for col in range(1, cols)]
         else:
-            self.tableWidget.item(row,0).setFlags(Qt.ItemIsEnabled)
+            [self.tableWidget.item(row,col).setFlags(Qt.ItemIsEnabled) for col in range(1, cols)]
 
 
 
@@ -555,6 +575,12 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         msg.exec_()
 
     def closeEvent(self, event):
+
+        self.settings.setValue('MainWindow/geometry', self.saveGeometry())
+        self.settings.setValue('MainWindow/state', self.saveState())
+        self.settings.setValue('MainWindow/toolbar', self.actionToolbar.isChecked())
+        self.settings.setValue('MainWindow/dockGuess', self.actionGuess.isChecked())
+        self.settings.setValue('MainWindow/dockOut', self.actionOutput.isChecked())
         if self.changed:
             result = QMessageBox.question(self,
                     "Unsaved file...",
