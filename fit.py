@@ -51,13 +51,13 @@ class FIT:
                 #lorentzian peak
                 return I/ (1+((x - x0)**2 /s**2))
 
-        def Peak(self, x, *pars, **kwargs):
+        @staticmethod
+        def Peak(self, x, *pars, shape):
                 #returns the peak witht the selected shape
                 I = pars[0]
                 gamma = pars[1]
                 x0 = pars[2]
                 v =0
-                shape =kwargs['shape']
                 if (shape =='V'): #if gaussian
                         if len(pars)==4:
                                 v =pars[3]
@@ -75,7 +75,7 @@ class FIT:
                 temp =np.zeros(len(t))
                 for i in np.arange(0, len(self.names)):
                         indx = int(np.sum(self.args[:i]))
-                        temp = np.sum((temp, self.Peak(t,  *pars[indx:indx+self.args[i]], shape=self.shape[i])), axis=0)
+                        temp = np.sum((temp, self.Peak(self, t,  *pars[indx:indx+self.args[i]], shape=self.shape[i])), axis=0)
                 return temp
 
         def FWHM(self):
@@ -90,7 +90,7 @@ class FIT:
                         nearest_below = (np.abs(Y[0:pos_extremum] - HM)).idxmin()
                         self.fwhm[i] = (np.mean(X[nearest_above ]) - np.mean(X[nearest_below]))
 
-        def area(self):
+        def Area(self):
                 #integrates all the peaks
                 self.area=[]
                 for name in self.names:
@@ -100,7 +100,7 @@ class FIT:
         def deconvolute(self, data, parguess, bounds, batch):
                 #deconvolution routine
                 self.peaks['freq']=data.X
-                self.peaks['exp'] = data.noBaseline
+                self.peaks['exp'] = data.current
                 #weighting function (lower value - higher weight)
                 sigma =np.ones(len(data.X))*2
                 sigma[np.abs(data.X-1500)<100]=0.6
@@ -112,17 +112,17 @@ class FIT:
 
                 try:
                     #Fit
-                    self.pars, pcov = curve_fit(self.model, data.X, data.noBaseline, parguess, sigma=sigma, bounds = bounds)
+                    self.pars, pcov = curve_fit(self.model, data.X, data.current, parguess, sigma=sigma, bounds = bounds)
                     self.perr= np.sqrt(np.diag(pcov))
 
                     if not batch:
                         #Calculate each peak
                         for i, name in enumerate(self.names):
                                 indx = int(np.sum(self.args[:i]))
-                                self.peaks[name] = self.Peak(data.X, *self.pars[indx:indx+self.args[i]], shape =self.shape[i])
+                                self.peaks[name] = self.Peak(self, data.X, *self.pars[indx:indx+self.args[i]], shape =self.shape[i])
                         self.peaks['cumulative']=self.model(data.X, *self.pars) #save the fit result
                         self.FWHM() #calculate fwhm
-                        self.area() #calculate the areas
+                        self.Area() #calculate the areas
                         self.printResult(data) #print the fit report
                 except RuntimeError:
                     if not batch:
@@ -161,12 +161,12 @@ class FIT:
                         indx = int(np.sum(self.args[:i]))
                         params = self.pars[indx:indx+self.args[i]]
                         errs = self.perr[indx:indx+self.args[i]]
-                        text = text +"Peak %s:\n        Center: %.4f +/- %.4f cm-1\n    Amplitude: %.4f +/- %.4f\n      gamma: %.4f +/- %.4f\n  FWHM: %.4f\n" %(name,
+                        text = text +"Peak %s:\n    Center: %.4f +/- %.4f cm-1\n    Amplitude: %.4f +/- %.4f\n    gamma: %.4f +/- %.4f\n    FWHM: %.4f\n"%(name,
                                 params[2], errs[2], params[0], errs[0], params[1], errs[1], self.fwhm[i])
                         if self.shape[i]=='V':
-                                text = text +"  L/G ratio = %.4f\n" %params[3]
+                                text = text +"    L/G ratio = %.4f\n" %params[3]
                         self.intensity = np.append(self.intensity, params[0])
-                        text = text +"  Area = %.4f\n" %self.area[i]
+                        text = text +"    Area = %.4f\n\n" %self.area[i]
                 # text = text +"\n**************Ratio - Amplitude************\n   D1/G= %.4f\n    D4/G= %.4f\n" %(self.intensity[1]/self.intensity[3], self.intensity[0]/self.intensity[3])
                 '''
                 if len(self.intensity)==5:
