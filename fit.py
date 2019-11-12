@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from scipy import asarray as ar,exp
 from collections import OrderedDict
+from mcmc import MCMC
 
 #Linestyles
 linestyles = OrderedDict(
@@ -96,6 +97,34 @@ class FIT:
                 for name in self.names:
                         self.area = np.append(self.area ,np.trapz(self.peaks[name], x = self.peaks['freq']))
 
+        def decMCMC(self, data, parguess, bounds, steps):
+                #deconvolution with MCMC
+                self.deconvolute(data, parguess, bounds, False)
+                parguess = self.pars
+                bounds = np.asarray(bounds)
+                Norm = np.max(data.current)/100
+                Y = data.current/Norm
+                print(bounds)
+                parguess[::3] /= Norm
+                print(parguess)
+                # corr = np.ones(len(parguess))
+                corr = np.asarray([Norm if n%3 == 0 else 1 for n in np.arange(len(parguess))])
+
+                try:
+                    mcmc = MCMC(self.model, parguess, bounds)
+                    mcmc.step = [0.1 if (n-1)%3 == 0 else 0.5 for n in np.arange(len(parguess))]
+                    self.pars, self.perr = mcmc(data.X, Y, steps, corr = corr )
+
+                    #Calculate each peak
+                    for i, name in enumerate(self.names):
+                            indx = int(np.sum(self.args[:i]))
+                            self.peaks[name] = self.Peak(self, data.X, *self.pars[indx:indx+self.args[i]], shape =self.shape[i])
+                    self.peaks['cumulative']=self.model(data.X, *self.pars) #save the fit result
+                    self.FWHM() #calculate fwhm
+                    self.Area() #calculate the areas
+                    self.printResult(data) #print the fit report
+                except Exception as e:
+                    print('exception\n', e)
 
         def deconvolute(self, data, parguess, bounds, batch):
                 #deconvolution routine

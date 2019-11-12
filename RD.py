@@ -11,6 +11,7 @@ import gui
 from dialogs import *
 from fit import FIT
 from data import DATA
+from mcmc import MCMC
 from convertwdf import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -41,6 +42,7 @@ class Worker(QRunnable):
             self.fit.deconvolute(*self.args)
         except Exception as e:
             print('something went wrong\n', e)
+
 class Deconvolute(QThread):
 
     error = pyqtSignal()
@@ -91,6 +93,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.actionSpike_Removal.triggered.connect(self.removeSpikes)
         self.actionSmoothing.triggered.connect(self.Smoothing)
         self.actionDeconvolute.triggered.connect(self.Deconvolution)
+        self.actionDeconvolute_MCMC.triggered.connect(self.DeconvMCMC)
         self.actionLoadGuess.triggered.connect(self.LoadGuess)
         self.actionLoad_defaults.triggered.connect(lambda: self.LoadGuess(fname = self.path+'/config/initialData.csv'))
         self.actionExportGuess.triggered.connect(self.ExportGuess)
@@ -127,7 +130,8 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         actionSpike = QAction(QIcon("graphics/spike.svg"),"Spike removal",self)
         actionSmooth = QAction(QIcon("graphics/smooth.svg"),"Smoothing",self)
         actionBaseline = QAction(QIcon("graphics/baseline.png"),"Remove baseline",self)
-        actionDeconv = QAction(QIcon("graphics/deconv.svg"),"Deconvolution",self)
+        actionDeconv = QAction(QIcon("graphics/deconv.svg"),"Deconvolution", self)
+        actionMCMC = QAction(QIcon("graphics/mcmc.png"),"Deconvolution\nwith MCMC", self)
         self.toolBar.addAction(actionOpen)
         self.toolBar.addAction(actionSave)
         self.toolBar.addSeparator()
@@ -137,6 +141,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.toolBar.addAction(actionSmooth)
         self.toolBar.addSeparator()
         self.toolBar.addAction(actionDeconv)
+        self.toolBar.addAction(actionMCMC)
         self.toolBar.addSeparator()
         self.toolBar.toggleViewAction().setChecked(self.actionToolbar.isChecked())
         actionOpen.triggered.connect(self.New)
@@ -146,6 +151,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         actionSave.triggered.connect(self.Save)
         actionSmooth.triggered.connect(self.Smoothing)
         actionDeconv.triggered.connect(self.Deconvolution)
+        actionMCMC.triggered.connect(self.DeconvMCMC)
 
         self.startUp()
 
@@ -221,7 +227,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.canvas.draw()
         return y_
 
-    def Deconvolution(self):
+    def prepDataForDeconv(self):
         if not np.shape(self.data.X):
             self.errorBox('There is no data', 'No data...')
             return
@@ -233,7 +239,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
             if result == QMessageBox.Yes:
                 self.Baseline()
             else:
-                return
+                return -1, -1, -1
         rows = self.tableWidget.rowCount()
         cols = self.tableWidget.columnCount()
         params = pd.DataFrame(columns = ['lb', 'pos', 'pos_min', 'pos_max',  'int', 'width', 'shape'])
@@ -243,7 +249,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
                 if True in error:
                     self.errorBox("Bad parameters", "Bad values")
                     self.dockGuess.raise_()
-                    return
+                    return -1, -1, -1
                 d =[self.tableWidget.item(row, col).text() for col in range(1, cols-1)]
                 p_shape = self.tableWidget.cellWidget(row, cols-1).currentText().strip()[0]
                 params = params.append({'lb': d[0],  'pos' : d[1], 'pos_min' : d[2],
@@ -251,14 +257,34 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.fit = FIT(params['shape'], params['lb'])
         parguess = np.concatenate([[params['int'][i], params['width'][i], params['pos'][i]]
                     for i in range(len(params['lb'])) ]).astype(float)
-        lower = np.concatenate([[10, 10, params['pos_min'][i]] for i in range(len(params['lb'])) ]).astype(float)
+        lower = np.concatenate([[5, 5, params['pos_min'][i]] for i in range(len(params['lb'])) ]).astype(float)
         upper = np.concatenate([[float('inf'), float('inf'), params['pos_max'][i]] for i in range(len(params['lb'])) ]).astype(float)
-        # worker = Worker(self.fit, self.data, parguess, [lower, upper], False)
+        return parguess, lower, upper
+
+    def Deconvolution(self):
+        parguess, lower, upper = self.prepDataForDeconv()
+        if not np.shape(parguess):
+            return
+        bounds = [lower, upper]
         progress = QProgressDialog("Deconvoluting...", "Cancel", 0, 100)
         progress.show()
         progress.setValue(5)
         self.error = False
-        self.deconvolutionThread = Deconvolute(self.fit.deconvolute, self.data, parguess, [lower, upper], False)
+        self.deconvolutionThread = Deconvolute(self.fit.deconvolute, self.data, parguess, bounds, False)
+        self.deconvolutionThread.finished.connect(lambda: [progress.setValue(100), self.plotDeconvResult()])
+        self.deconvolutionThread.error.connect(lambda: [progress.setValue(100), self.errorBox("Wrong parameters...")])
+        self.deconvolutionThread.start()
+
+    def DeconvMCMC(self):
+        parguess, lower, upper = self.prepDataForDeconv()
+        if not np.shape(parguess):
+            return
+        bounds = [lower, upper]
+        progress = QProgressDialog("Deconvoluting...", "Cancel", 0, 100)
+        progress.show()
+        progress.setValue(5)
+        self.error = False
+        self.deconvolutionThread = Deconvolute(self.fit.decMCMC, self.data, parguess, bounds, 10000)
         self.deconvolutionThread.finished.connect(lambda: [progress.setValue(100), self.plotDeconvResult()])
         self.deconvolutionThread.error.connect(lambda: [progress.setValue(100), self.errorBox("Wrong parameters...")])
         self.deconvolutionThread.start()
