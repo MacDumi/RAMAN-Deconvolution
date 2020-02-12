@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="48"
+   height="48"
+   viewBox="0 0 12.7 12.7"
+   version="1.1"
+   id="svg8"
+   inkscape:version="0.92.4 5da689c313, 2019-01-14"
+   sodipodi:docname="mcmc.svg"
+   inkscape:export-filename="/home/cat/Workspace/Deconvolution/graphics/mcmc.png"
+   inkscape:export-xdpi="150"
+   inkscape:export-ydpi="150">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="5.6"
+     inkscape:cx="-7.9966242"
+     inkscape:cy="25.802306"
+     inkscape:document-units="mm"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     inkscape:pagecheckerboard="true"
+     inkscape:window-width="481"
+     inkscape:window-height="413"
+     inkscape:window-x="817"
+     inkscape:window-y="315"
+     inkscape:window-maximized="0"
+     units="px"
+     showguides="true"
+     inkscape:guide-bbox="true"
+     inkscape:snap-global="false" />
+  <metadata
+     id="metadata5">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(0,-284.3)">
+    <g
+       id="g842"
+       transform="matrix(1.0294073,0,0,1.0294073,-0.18769331,-8.8425889)">
+      <flowRoot
+         transform="matrix(0.44664591,0,0,0.44664591,16.504761,284.12379)"
+         style="font-style:normal;font-weight:normal;font-size:13.33333302px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#ff0000;fill-opacity:1;stroke:none"
+         id="flowRoot814"
+         xml:space="preserve"><flowRegion
+           style="fill:#ff0000"
+           id="flowRegion816"><rect
+             style="fill:#ff0000"
+             y="2.8214285"
+             x="-34.375"
+             height="40.357143"
+             width="41.607143"
+             id="rect818" /></flowRegion><flowPara
+           style="font-weight:bold;fill:#ff0000"
+           id="flowPara822">MC</flowPara></flowRoot>      <flowRoot
+         xml:space="preserve"
+         id="flowRoot832"
+         style="font-style:normal;font-weight:normal;font-size:13.33333302px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#ff0000;fill-opacity:1;stroke:none"
+         transform="matrix(0.44664591,0,0,0.44664591,16.504761,289.25937)"><flowRegion
+           style="fill:#ff0000"
+           id="flowRegion828"><rect
+             style="fill:#ff0000"
+             id="rect826"
+             width="41.607143"
+             height="40.357143"
+             x="-34.375"
+             y="2.8214285" /></flowRegion><flowPara
+           id="flowPara830"
+           style="font-weight:bold;fill:#ff0000">MC</flowPara></flowRoot>    </g>
+  </g>
+</svg>

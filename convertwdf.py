@@ -30,5 +30,6 @@ def convert(path, **kwarg):
 			print("CSV file exported")
 			if 'text' in kwarg:
 				np.savetxt(path[:-3]+'txt', out.values[:,:2], header=header, delimiter='	')
-if len(sys.argv)>1:
-	convert(sys.argv[1])
+if __name__ == '__main__':
+    if len(sys.argv)>1:
+        convert(sys.argv[1])

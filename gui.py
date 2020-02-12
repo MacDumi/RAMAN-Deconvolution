@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'gui.ui'
 #
-# Created by: PyQt5 UI code generator 5.13.1
+# Created by: PyQt5 UI code generator 5.14.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -182,6 +182,8 @@ class Ui_MainWindow(object):
         self.actionLoad_defaults.setObjectName("actionLoad_defaults")
         self.actionDeconvolute_MCMC = QtWidgets.QAction(MainWindow)
         self.actionDeconvolute_MCMC.setObjectName("actionDeconvolute_MCMC")
+        self.actionBatch_deconvolution = QtWidgets.QAction(MainWindow)
+        self.actionBatch_deconvolution.setObjectName("actionBatch_deconvolution")
         self.menuFile.addAction(self.actionNew)
         self.menuFile.addAction(self.actionSave)
         self.menuFile.addSeparator()
@@ -197,6 +199,7 @@ class Ui_MainWindow(object):
         self.menuDeconvolution_2.addSeparator()
         self.menuDeconvolution_2.addAction(self.actionDeconvolute)
         self.menuDeconvolution_2.addAction(self.actionDeconvolute_MCMC)
+        self.menuDeconvolution_2.addAction(self.actionBatch_deconvolution)
         self.menuDeconvolution_2.addSeparator()
         self.menuDeconvolution_2.addAction(self.actionLoadGuess)
         self.menuDeconvolution_2.addAction(self.actionLoad_defaults)
@@ -263,3 +266,4 @@ class Ui_MainWindow(object):
         self.actionLoad_defaults.setText(_translate("MainWindow", "Load default guess parameters"))
         self.actionDeconvolute_MCMC.setText(_translate("MainWindow", "Deconvolute (MCMC)"))
         self.actionDeconvolute_MCMC.setShortcut(_translate("MainWindow", "Ctrl+Shift+M"))
+        self.actionBatch_deconvolution.setText(_translate("MainWindow", "Batch deconvolution"))

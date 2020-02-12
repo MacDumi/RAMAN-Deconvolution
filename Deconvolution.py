@@ -46,16 +46,18 @@ font = {'family': 'serif',
                 'size': 14,
                 }
 def clear():
+        #function to clear the screen
         #for Windows
         if os.name == 'nt':
             _ = os.system('cls')
         #for posix
         else:
             _ = os.system('clear')
+
 def readConf():
-        path =os.path.dirname(os.path.realpath(__file__))
         #read the configuration file
         global degree, voigt, thrsh, six, spike_detect, peakLimits, parameters, skipRegion, _abs
+        path =os.path.dirname(os.path.realpath(__file__))
         config = configparser.ConfigParser()
         if len(config.read(path+'/config/config.ini')):
                 degree = int(config['DEFAULT']['degree'])

@@ -11,6 +11,7 @@ from scipy.optimize import curve_fit
 from scipy import asarray as ar,exp
 from collections import OrderedDict
 from mcmc import MCMC
+from PyQt5.QtCore import QObject, pyqtSignal
 
 #Linestyles
 linestyles = OrderedDict(
@@ -26,8 +27,8 @@ linestyles = OrderedDict(
      ('densely dashdotdotted', (0, (3, 1, 1, 1, 1, 1)))])
 ln_style = list(linestyles.items())
 
-class FIT:
-
+class FIT(QObject):
+        pg = pyqtSignal(int)
         def __init__(self, shape, names):
                 #constructor
                 super(FIT, self).__init__()
@@ -36,6 +37,7 @@ class FIT:
                 self.args = [4 if self.shape[i]=='V' else 3 for i in np.arange(0, len(self.shape))]
                 self.peaks = pd.DataFrame()
                 self.fwhm = np.zeros(len(self.names))
+                self.error = False
 
         @staticmethod
         def Voigt(x, I, x0, s, n):
@@ -112,6 +114,7 @@ class FIT:
 
                 try:
                     mcmc = MCMC(self.model, parguess, bounds)
+                    mcmc.pg.connect(self.pg.emit)
                     mcmc.step = [0.1 if (n-1)%3 == 0 else 0.5 for n in np.arange(len(parguess))]
                     self.pars, self.perr = mcmc(data.X, Y, steps, corr = corr )
 
@@ -139,27 +142,34 @@ class FIT:
                 sigma[np.abs(data.X-900)<100]=0.9
                 sigma[np.abs(data.X-1750)<100]=0.9
 
+                Norm = np.max(data.current)/100
+                Y = data.current/Norm
+                parguess[::3] /= Norm
+                corr = np.asarray([Norm if n%3 == 0 else 1 for n in np.arange(len(parguess))])
                 try:
                     #Fit
-                    self.pars, pcov = curve_fit(self.model, data.X, data.current, parguess, sigma=sigma, bounds = bounds)
+                    self.pars, pcov = curve_fit(self.model, data.X, Y, parguess, sigma=sigma, bounds = bounds)
                     self.perr= np.sqrt(np.diag(pcov))
+                    self.pars = [par*cor for par, cor in zip(self.pars, corr)]
 
+                    #Calculate each peak
+                    for i, name in enumerate(self.names):
+                            indx = int(np.sum(self.args[:i]))
+                            self.peaks[name] = self.Peak(self, data.X, *self.pars[indx:indx+self.args[i]], shape =self.shape[i])
+                    self.peaks['cumulative']=self.model(data.X, *self.pars) #save the fit result
+                    self.FWHM() #calculate fwhm
+                    self.Area() #calculate the areas
                     if not batch:
-                        #Calculate each peak
-                        for i, name in enumerate(self.names):
-                                indx = int(np.sum(self.args[:i]))
-                                self.peaks[name] = self.Peak(self, data.X, *self.pars[indx:indx+self.args[i]], shape =self.shape[i])
-                        self.peaks['cumulative']=self.model(data.X, *self.pars) #save the fit result
-                        self.FWHM() #calculate fwhm
-                        self.Area() #calculate the areas
                         self.printResult(data) #print the fit report
-                except RuntimeError:
+                except RuntimeError as e:
                     if not batch:
-                        print('Failed to deconvolute...\nTry with a different initial guess')
+                        print('Failed to deconvolute...\nTry with a different initial guess:\n', e)
+                        self.error = True
                         # os._exit(0)
-                except ValueError:
+                except ValueError as e:
                     if not batch:
-                        print('Failed to deconvolute...\nTry with different bounds')
+                        self.error = True
+                        print('Failed to deconvolute...\nTry with different bounds:\n', e)
 
         def plot(self, *args):
                 #plot overlapping peaks with or without the baseline

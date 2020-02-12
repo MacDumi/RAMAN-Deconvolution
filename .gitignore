@@ -3,3 +3,4 @@ __pycache__/
 elements.py
 molmass.py
 *.ui
+test*

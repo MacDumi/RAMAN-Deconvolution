@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 from tqdm import tqdm
+from PyQt5.QtCore import pyqtSignal, QObject
 
 """
 MCMC is an implementation of the Markov chain Monte Carlo method for fitting
@@ -41,8 +42,9 @@ Optional:
     result = mcmc(X, Y, nrOfSteps, corr=factor)
 
 """
-class MCMC():
+class MCMC(QObject):
 
+    pg = pyqtSignal(int, name='pg')
     def __init__(self, model, guess, limits):
         #constructor
         super(MCMC, self).__init__()
@@ -144,6 +146,10 @@ class MCMC():
             #Decide if to accept the new theta values
             if ratio > np.random.rand():
                 th_curr, P_current = th_prop, P_proposed
+
+            prog = i*100/steps
+            if prog%1==0:
+                self.pg.emit(prog)
 
             #save current theta value in the chain
             self.__chain = np.row_stack((self.__chain, th_curr))

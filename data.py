@@ -49,18 +49,23 @@ class DATA:
         def getData(self):
             data = pd.DataFrame()
             data['Raman shift'] = self.X
-            data['Raw intensity'] = self.Y
-            if np.shape(self.current):
+            comments = ''
+            if np.shape(self.baseline):
                 data['Baseline'] = self.baseline
-                data['Baseline corrected'] = self.current
-
                 comments = '#Polynomial fit -- degree: {}\n'.format(self.bsDegree)
                 comments += '#Fitting coefficients (high to low):\n#'
                 coefficients = ['{:.4E}  'for coef in self.bsCoef]
                 comments += ''.join(coefficients).format(*self.bsCoef)+'\n'
+            if np.shape(self.current):
+                data['Corrected'] = self.current
+            data['Raw intensity'] = self.Y
             return data, comments
 
         def crop(self, _min, _max):
+            if int(_min)> self.X[0]:
+                _min = self.X[0]
+            if int(_max)> self.X[-1]:
+                _max = self.X[-1]
             min_ = np.argwhere(self.X>int(_min))[0][0]
             max_ = np.argwhere(self.X>int(_max))[0][0]
             self.prev = np.column_stack((self.X, self.current))

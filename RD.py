@@ -8,20 +8,53 @@ import sys, os
 import ntpath
 import configparser
 import gui
+import copy
 from dialogs import *
 from fit import FIT
 from data import DATA
-from mcmc import MCMC
 from convertwdf import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from recordtype import recordtype
 from distutils.util import strtobool
+import itertools
+import multiprocessing as mp
+from multiprocessing import Pool, cpu_count, Value
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
 
 Limits = recordtype('Limits', ['min', 'max'])
+
+def BatchWorker(*params):
+    f, names, shape, bsParams, crop, peakLimits, parguess, bounds, index = params
+    dt = DATA()
+    result = pd.Series(name = os.path.basename(f), index = index, dtype = object)
+    try:
+        dt.loadData(f)
+        dt.crop(crop.min, crop.max)
+        dt.fitBaseline(bsParams, peakLimits, abs = True)
+
+        text = ''
+        for deg in np.arange(0, dt.bsDegree+1):
+            if dt.bsCoef[deg]>=0 and deg!=0:
+                text += '+'
+            text += '{:.4E}*x^{}'.format(dt.bsCoef[deg], dt.bsDegree-deg)
+        result.loc['baseline'] = text
+    except Exception as e:
+        print("Error {}".format(e))
+    try:
+        fit = FIT(shape, names)
+        fit.deconvolute(dt, parguess, bounds, batch=True)
+        result.iloc[1::4] = fit.pars[2::3]
+        result.iloc[2::4] = fit.pars[::3]
+        result.iloc[3::4] = fit.fwhm
+        result.iloc[4::4] = fit.area
+    except:
+        print('Could not deconvolute the {} file'.format(f))
+        result.iloc[1:len(index)] = -1*np.ones(len(index)-1)
+    return result
 
 class Worker(QRunnable):
     '''
@@ -46,6 +79,7 @@ class Worker(QRunnable):
 class Deconvolute(QThread):
 
     error = pyqtSignal()
+    progress = pyqtSignal(int, name='progress')
     def __init__(self, function, *args):
         QThread.__init__(self)
         self.function = function
@@ -58,11 +92,58 @@ class Deconvolute(QThread):
             self.error.emit()
             print('Something went wrong: ', e)
 
+class BatchDeconvolute(QThread):
+    error = pyqtSignal()
+    finished = pyqtSignal(str, name='finish')
+    progress = pyqtSignal(int, name='progress')
+
+    def __init__(self, _files, _parguess, _bounds, _fit, _params):
+        QThread.__init__(self)
+        self.files = _files
+        self.parguess = _parguess
+        self.bounds = _bounds
+        self.cores = _params[0]
+        self.bsParams = _params[1:]
+        self.fit = _fit
+
+    def run(self):
+        #create N processes that will read files and deconvolute them
+        try:
+            _min = int(self.bsParams[1])
+            _max = int(self.bsParams[2])
+            _crop_min = int(self.bsParams[3])
+            _crop_max = int(self.bsParams[4])
+        except ValueError:
+            self.error.emit()
+
+        self.cropLimits = Limits(_crop_min, _crop_max)
+        self.peakLimits = Limits(_min, _max)
+
+        index = np.append('baseline', ['_'.join(name) for name in itertools.product(self.fit.names, ('Position', 'Amplitude', 'FWHM', 'Area'))])
+        out = pd.DataFrame(index = index)
+
+        arguments = self.fit.names, self.fit.shape, self.bsParams[0], self.cropLimits, self.peakLimits, self.parguess, self.bounds, index
+        arguments = [np.append(f, arguments) for f in self.files]
+
+        with ProcessPoolExecutor(max_workers=self.cores) as executor:
+            for i, r in enumerate(executor.map(BatchWorker, *np.transpose(arguments))):
+                prog = int(i*100/len(self.files))
+                if prog%1==0:
+                   self.progress.emit(prog)
+                out[r.name] = r
+        out.to_csv(os.path.dirname(self.files[0])+'/BatchDeconvolutionResults.csv')
+        if list(out.iloc[2]).count(-1) >0:
+            pb = list(out.columns[out.iloc[0] == -1])
+            self.finished.emit('<|>'.join(pb))
+        else:
+            self.finished.emit('OK')
+
 
 class RD(QMainWindow, gui.Ui_MainWindow):
 
     header  = 50*'*'+'\n\n'+10*' '+'DECONVOLUTION OF RAMAN SPECTRA'
     header += 10*''+'\n\n'+50*'*'
+
 
     def __init__(self):
         super(RD, self).__init__()
@@ -94,6 +175,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.actionSmoothing.triggered.connect(self.Smoothing)
         self.actionDeconvolute.triggered.connect(self.Deconvolution)
         self.actionDeconvolute_MCMC.triggered.connect(self.DeconvMCMC)
+        self.actionBatch_deconvolution.triggered.connect(self.BatchDeconv)
         self.actionLoadGuess.triggered.connect(self.LoadGuess)
         self.actionLoad_defaults.triggered.connect(lambda: self.LoadGuess(fname = self.path+'/config/initialData.csv'))
         self.actionExportGuess.triggered.connect(self.ExportGuess)
@@ -132,6 +214,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         actionBaseline = QAction(QIcon("graphics/baseline.png"),"Remove baseline",self)
         actionDeconv = QAction(QIcon("graphics/deconv.svg"),"Deconvolution", self)
         actionMCMC = QAction(QIcon("graphics/mcmc.png"),"Deconvolution\nwith MCMC", self)
+        actionBatch = QAction(QIcon("graphics/batch.png"),"Batch deconvolution", self)
         self.toolBar.addAction(actionOpen)
         self.toolBar.addAction(actionSave)
         self.toolBar.addSeparator()
@@ -143,6 +226,8 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.toolBar.addAction(actionDeconv)
         self.toolBar.addAction(actionMCMC)
         self.toolBar.addSeparator()
+        self.toolBar.addAction(actionBatch)
+        self.toolBar.addSeparator()
         self.toolBar.toggleViewAction().setChecked(self.actionToolbar.isChecked())
         actionOpen.triggered.connect(self.New)
         actionCrop.triggered.connect(self.Crop)
@@ -152,6 +237,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         actionSmooth.triggered.connect(self.Smoothing)
         actionDeconv.triggered.connect(self.Deconvolution)
         actionMCMC.triggered.connect(self.DeconvMCMC)
+        actionBatch.triggered.connect(self.BatchDeconv)
 
         self.startUp()
 
@@ -162,6 +248,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
 
 
     def startUp(self):
+        #generate dummy data to plot at start-up
         X = np.arange(800, 2000, 2)
         Y1 = FIT.lorents(X, 1800, 1358, 110)
         Y2 = FIT.lorents(X, 1700, 1590, 50)
@@ -174,6 +261,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.plotAdjust()
 
     def removeSpikes(self):
+        #detect and remove spikes in the data (current data)
         if not np.shape(self.data.X):
             self.errorBox('There is no data', 'No data...')
             return
@@ -196,6 +284,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
             self.setWindowTitle(self.windowTitle()+'*')
 
     def Smoothing(self):
+        #smooth the current data according to the user defined parameters
         if not np.shape(self.data.X):
             self.errorBox('There is no data', 'No data...')
             return
@@ -214,11 +303,13 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.Plot(self.data.X, self.data.current, "Smoothed data")
         self.plotAdjust()
         if not self.changed:
+            #if the current data was changed add '*' to the title
             self.changed = True
             self.setWindowTitle(self.windowTitle()+'*')
 
 
     def previewSmoothed(self):
+        #plot a preview of the smoothed data
         y_ = self.data.smooth(self.data.current, 2*self.smoothDialog.slider.value()+1)
         if self.baseline != 0:
             self.baseline.remove()
@@ -227,17 +318,23 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.canvas.draw()
         return y_
 
-    def prepDataForDeconv(self):
-        if not np.shape(self.data.X):
+    def prepDataForDeconv(self, **kwargs):
+        #prepare the data for deconvolution
+        #the function first checks if the data is present and that the baseline was removed
+        #fitting parameters are then taken from the table and put in a list
+        batch = kwargs.get('batch', False)
+        if not np.shape(self.data.X) and not batch:
             self.errorBox('There is no data', 'No data...')
-            return
-        if not np.shape(self.data.baseline):
+            return -1, -1, -1
+        if not np.shape(self.data.baseline) and not batch:
             result = QMessageBox.question(self,
                     "Baseline...",
                     "The baseline is still present!\nWould you like to remove it first?",
                     QMessageBox.Yes| QMessageBox.No)
             if result == QMessageBox.Yes:
-                self.Baseline()
+                res = self.Baseline()
+                if res == -1:
+                    return -1, -1, -1
             else:
                 return -1, -1, -1
         rows = self.tableWidget.rowCount()
@@ -262,15 +359,18 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         return parguess, lower, upper
 
     def Deconvolution(self):
+        #deconvolute the data in a different thread
         parguess, lower, upper = self.prepDataForDeconv()
         if not np.shape(parguess):
             return
         bounds = [lower, upper]
         progress = QProgressDialog("Deconvoluting...", "Cancel", 0, 100)
+        progress.setCancelButton(None)
         progress.show()
         progress.setValue(5)
         self.error = False
         self.deconvolutionThread = Deconvolute(self.fit.deconvolute, self.data, parguess, bounds, False)
+        progress.canceled.connect(self.deconvolutionThread.exit)
         self.deconvolutionThread.finished.connect(lambda: [progress.setValue(100), self.plotDeconvResult()])
         self.deconvolutionThread.error.connect(lambda: [progress.setValue(100), self.errorBox("Wrong parameters...")])
         self.deconvolutionThread.start()
@@ -281,17 +381,70 @@ class RD(QMainWindow, gui.Ui_MainWindow):
             return
         bounds = [lower, upper]
         progress = QProgressDialog("Deconvoluting...", "Cancel", 0, 100)
+        progress.setCancelButton(None)
         progress.show()
-        progress.setValue(5)
+        progress.setValue(0)
         self.error = False
         self.deconvolutionThread = Deconvolute(self.fit.decMCMC, self.data, parguess, bounds, 10000)
+        self.fit.pg.connect(progress.setValue)
+        progress.canceled.connect(self.deconvolutionThread.exit)
         self.deconvolutionThread.finished.connect(lambda: [progress.setValue(100), self.plotDeconvResult()])
         self.deconvolutionThread.error.connect(lambda: [progress.setValue(100), self.errorBox("Wrong parameters...")])
         self.deconvolutionThread.start()
 
+    def BatchDeconv(self):
+        if self.changed:
+            result = QMessageBox.question(self,
+                    "Unsaved file...",
+                    "Do you want to save the data before exiting?",
+                    QMessageBox.Yes| QMessageBox.No |QMessageBox.Cancel)
+            if result == QMessageBox.Yes:
+                self.Save()
+            elif result == QMessageBox.Cancel:
+                return
+        self.changed = False
+        path = self.initialDir
+        fnames, _filter = QFileDialog.getOpenFileNames(self, 'Open files', path,"Text files (*.txt *.dat);; Wire data files (*.wdf);; All files (*.*)")
+        if not fnames:
+            return
+        elif self.initialDir!=ntpath.dirname(fnames[0]):
+            self.initialDir=ntpath.dirname(fnames[0]) #update the initial directory for the Open/Save dialog
+            self.settings.setValue('directory', self.initialDir)
+        self.setWindowTitle( 'Raman Deconvolution - Batch Deconvolution')
+        if _filter == 'Wire data files (*.wdf)':
+            for i, fname in enumerate(fnames):
+                convert(fname)
+                fnames[i] = fname[:-3]+'txt'
+
+        dialog = BatchDialog(len(fnames), self.degree, self.peakLimits.min, self.peakLimits.max, 700, 2500, cpu_count())
+        result = dialog.exec_()
+        if not result:
+            return
+        params = dialog.getData()
+
+        parguess, lower, upper = self.prepDataForDeconv(batch=True)
+        if not np.shape(parguess):
+            return
+        bounds = [lower, upper]
+        progress = QProgressDialog("Deconvoluting", "Cancel", 0, 100)
+        progress.setCancelButton(None)
+        progress.show()
+        progress.setValue(0)
+        self.batch = BatchDeconvolute(fnames, parguess, bounds, self.fit, params)
+        self.textOut.clear()
+        self.subplot.clear()
+
+        self.batch.progress.connect(progress.setValue)
+        self.batch.finished.connect(lambda x: [progress.setValue(100), self.errorBox('Some files were not deconvoluted...') if x!='OK' else print('all done')])
+        self.batch.error.connect(lambda: [progress.setValue(100), self.errorBox("Wrong parameters...")])
+        self.batch.start()
+
+
+
+
 
     def plotDeconvResult(self):
-        if self.error:
+        if self.error or self.fit.error:
             return
         self.statusbar.showMessage("Thread finished succesfully", 1000)
         self.Plot(self.data.X, self.data.current, "Experimental data")
@@ -351,7 +504,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
     def Baseline(self):
         if not np.shape(self.data.X):
             self.errorBox('There is no data', 'No data...')
-            return
+            return -1
         if np.shape(self.data.baseline):
             self.data.setData(self.data.X, self.data.Y.copy())
         self.Plot(self.data.X, self.data.current, 'Experimental data')
@@ -367,7 +520,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         if not result:
             self.subplot.legend()
             self.canvas.draw()
-            return
+            return -1
         params = dialog.getData()
         try:
             _min = int(params[2])
@@ -625,7 +778,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
     def tableItemRightClicked(self, QPos):
         self.listMenu= QMenu()
         menu_item_2 = self.listMenu.addAction("Preview band")
-        menu_item_3 = self.listMenu.addAction("Preview all bands")
+        menu_item_3 = self.listMenu.addAction("Preview selected bands")
         self.listMenu.addSeparator()
         if self.tableWidget.item(self.tableWidget.currentRow(), 0).checkState() & Qt.Checked:
             menu_item_0 = self.listMenu.addAction("Don't use for deconvolution")
@@ -704,9 +857,16 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         cols = self.tableWidget.columnCount()
         rows = self.tableWidget.rowCount()
         cumulative = np.zeros(len(self.data.X))
+        intensity = [float(self.tableWidget.item(row, 5).text()) for row in range(rows) if self.tableWidget.item(row, 0).checkState()&Qt.Checked]
+        norm = max(self.data.current)/max(intensity)
         for row in range(rows):
-            if self.tableWidget.item(row, 1).flags() & Qt.ItemIsEnabled:
+            if self.tableWidget.item(row, 0).checkState() & Qt.Checked:
+                error = [self.itemCheck(self.tableWidget.item(row, col), silent=True) for col in range(1, cols-1)]
+                if True in error:
+                    self.errorBox("Bad parameters", "Bad values")
+                    return
                 params =[float(self.tableWidget.item(row, col).text()) for col in [5, 6, 2]]
+                params[0] *= norm
                 label = self.tableWidget.item(row, 1).text()
                 shape = self.tableWidget.cellWidget(row, 7).currentText().strip()[0]
                 print(params)
@@ -733,7 +893,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
     def about(self):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
-        msg.setText("Version v1.01α \nMade by CAT \nLille, 2019")
+        msg.setText("Version v1.01α \nMade by CAT \nLille, 2020")
         msg.setWindowTitle("About")
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()

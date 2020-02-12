@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 import baseline_dialog
+import batch_dialog
 import crop_dialog
 import spike_dialog
 import smooth_dialog
@@ -57,5 +58,27 @@ class BaselineDialog(QDialog, baseline_dialog.Ui_Dialog):
         _min = self.lineEdit_min.text()
         _max = self.lineEdit_max.text()
         return self.comboBox.currentIndex(), self.spinBox.value(), _min, _max
+
+"Batch dialog"
+class BatchDialog(QDialog, batch_dialog.Ui_Dialog):
+    def __init__(self, _files, _deg, _min, _max, _crop_min, _crop_max, _cores):
+        super(BatchDialog, self).__init__()
+        self.setupUi(self)
+        self.setFixedSize(self.size())
+        self.label_files.setText(str(_files))
+        self.spinBox.setValue(_deg)
+        self.lineEdit_min.setText(str(_min))
+        self.lineEdit_max.setText(str(_max))
+        self.lineEdit_cropMin.setText(str(_crop_min))
+        self.lineEdit_cropMax.setText(str(_crop_max))
+        self.comboBox_cores.addItems(list(map(str, range(1, _cores+1)))[::-1])
+
+    def getData(self):
+        _min = self.lineEdit_min.text()
+        _max = self.lineEdit_max.text()
+        _crop_min = self.lineEdit_cropMin.text()
+        _crop_max = self.lineEdit_cropMax.text()
+        return int(self.comboBox_cores.currentText()), self.spinBox.value(), _min, _max, _crop_min, _crop_max
+
 
 
