@@ -434,7 +434,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
             for i, fname in enumerate(fnames):
                 convert(fname)
                 fnames[i] = fname[:-3]+'txt'
-
+        fnames.sort()
         dialog = BatchDialog(len(fnames), self.degree, self.peakLimits.min, self.peakLimits.max, 700, 2500, cpu_count())
         result = dialog.exec_()
         if not result:
