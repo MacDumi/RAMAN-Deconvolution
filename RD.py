@@ -47,13 +47,23 @@ def BatchWorker(*params):
     try:
         fit = FIT(shape, names)
         fit.deconvolute(dt, parguess, bounds, batch=True)
-        result.iloc[1::4] = fit.pars[2::3]
-        result.iloc[2::4] = fit.pars[::3]
-        result.iloc[3::4] = fit.fwhm
-        result.iloc[4::4] = fit.area
-    except:
+        for i, pars in enumerate(zip(names, shape)):
+            result.loc[pars[0]+'_'+'Position'] = fit.pars[int(np.sum(fit.args[:i])+2)]
+            result.loc[pars[0]+'_'+'Amplitude'] = fit.pars[int(np.sum(fit.args[:i]))]
+            result.loc[pars[0]+'_'+'FWHM'] = fit.fwhm[i]
+            result.loc[pars[0]+'_'+'Area'] = fit.area[i]
+            if pars[1] == 'V':
+                result.loc[pars[0]+'_'+'L/G'] = fit.pars[int(np.sum(fit.args[:i])+3)]
+            elif pars[1] == 'B':
+                result.loc[pars[0]+'_'+'1/q'] = fit.pars[int(np.sum(fit.args[:i])+3)]
+        # result.iloc[1::4] = fit.pars[2::3]
+        # result.iloc[2::4] = fit.pars[::3]
+        # result.iloc[3::4] = fit.fwhm
+        # result.iloc[4::4] = fit.area
+    except Exception as e:
         print('Could not deconvolute the {} file'.format(f))
         result.iloc[1:len(index)] = -1*np.ones(len(index)-1)
+        print(e)
     return result
 
 class Worker(QRunnable):
@@ -94,7 +104,8 @@ class Deconvolute(QThread):
 
 class BatchDeconvolute(QThread):
     error = pyqtSignal()
-    finished = pyqtSignal(str, name='finish')
+    finished = pyqtSignal(str, name='finished')
+    saved = pyqtSignal(str, name='saved')
     progress = pyqtSignal(int, name='progress')
 
     def __init__(self, _files, _parguess, _bounds, _fit, _params):
@@ -119,7 +130,14 @@ class BatchDeconvolute(QThread):
         self.cropLimits = Limits(_crop_min, _crop_max)
         self.peakLimits = Limits(_min, _max)
 
-        index = np.append('baseline', ['_'.join(name) for name in itertools.product(self.fit.names, ('Position', 'Amplitude', 'FWHM', 'Area'))])
+        index = ['baseline']
+        for name, s in zip(self.fit.names, self.fit.shape):
+            index = np.append(index, [name+'_'+nm for nm in ('Position', 'Amplitude', 'FWHM', 'Area')])
+            if s == 'V':
+                index = np.append(index, '_'.join((name, 'L/G')))
+            elif s == 'B':
+                index = np.append(index, '_'.join((name, '1/q')))
+        # index = np.append('baseline', ['_'.join(name) for name in itertools.product(self.fit.names, ('Position', 'Amplitude', 'FWHM', 'Area'))])
         out = pd.DataFrame(index = index)
 
         arguments = self.fit.names, self.fit.shape, self.bsParams[0], self.cropLimits, self.peakLimits, self.parguess, self.bounds, index
@@ -132,6 +150,7 @@ class BatchDeconvolute(QThread):
                    self.progress.emit(prog)
                 out[r.name] = r
         out.to_csv(os.path.dirname(self.files[0])+'/BatchDeconvolutionResults.csv')
+        self.saved.emit(os.path.dirname(self.files[0])+'/BatchDeconvolutionResults.csv')
         if list(out.iloc[2]).count(-1) >0:
             pb = list(out.columns[out.iloc[0] == -1])
             self.finished.emit('<|>'.join(pb))
@@ -437,10 +456,8 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         self.batch.progress.connect(progress.setValue)
         self.batch.finished.connect(lambda x: [progress.setValue(100), self.errorBox('Some files were not deconvoluted...') if x!='OK' else print('all done')])
         self.batch.error.connect(lambda: [progress.setValue(100), self.errorBox("Wrong parameters...")])
+        self.batch.saved.connect(lambda x:[self.textOut.append('Results are saved at {}'.format(x)), self.dockOut.raise_()])
         self.batch.start()
-
-
-
 
 
     def plotDeconvResult(self):
@@ -556,12 +573,11 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         dt.setData(self.data.X, self.data.current)
         try:
             _min = int(dialog.lineEdit_min.text())
-        except ValueError:
-            self.statusbar.showMessage("Wrong value...setting to default", 3000)
-        try:
             _max = int(dialog.lineEdit_max.text())
         except ValueError:
             self.statusbar.showMessage("Wrong value...setting to default", 3000)
+            _min = self.peakLimits.min
+            _max = self.peakLimits.max
         if self.baseline != 0:
             self.limit_low.remove()
             self.limit_high.remove()
@@ -589,7 +605,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
             parameters = pd.read_csv(fname)
             self.tableWidget.setRowCount(0)
             cols = ['labels', 'freq', 'freq_min', 'freq_max' ,'intens', 'width']
-            shape = ['Lorentzian', 'Gaussian']
+            shape = ['Lorentzian', 'Gaussian', 'Voigt', 'BWF']
             for i, l in enumerate(parameters['labels']):
                 self.tableWidget.insertRow(i)
                 self.tableWidget.setItem(i, 0, QTableWidgetItem(''))
@@ -626,15 +642,17 @@ class RD(QMainWindow, gui.Ui_MainWindow):
 
         if not fname:
             return
-        cols = ['labels', 'freq', 'freq_min', 'freq_max' ,'intens', 'width', 'shape']
+        cols = ['labels', 'freq', 'freq_min', 'freq_max' ,'intens', 'width']
         rows = self.tableWidget.rowCount()
         guess = pd.DataFrame()
-        for i, c in enumerate(cols):
-            guess[c] = [self.tableWidget.item(row, i+1).text() for row in range(rows)]
-
-        guess.to_csv(fname, index=None)
-        self.statusbar.showMessage("Initial guess file saved succesfully", 2000)
-
+        try:
+            for i, c in enumerate(cols):
+                guess[c] = [self.tableWidget.item(row, i+1).text() for row in range(rows)]
+            guess['shape'] = [self.tableWidget.cellWidget(row, 7).currentText().strip()[0] for row in range(rows)]
+            guess.to_csv(fname, index=None)
+            self.statusbar.showMessage("Initial guess file saved succesfully", 2000)
+        except Exception as e:
+            self.errorBox('Error\n{}'.format(e), 'Parameters were not loaded')
 
     def readConfig(self):
 
@@ -843,6 +861,10 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         shape = self.tableWidget.cellWidget(row, cols-1).currentText().strip()[0]
         label = params[0]
         params = np.asarray([params[4], params[5], params[1]]).astype(float)
+        if shape == 'V':
+            params = np.append(params, 0.5)
+        elif shape == 'B':
+            params = np.append(params, 0.02)
         self.Plot(self.data.X, self.data.current, "Experimental data")
         self.subplot.plot(self.data.X, FIT.Peak(FIT, self.data.X, *params, shape = shape), label = label)
         self.subplot.legend()
@@ -869,8 +891,10 @@ class RD(QMainWindow, gui.Ui_MainWindow):
                 params[0] *= norm
                 label = self.tableWidget.item(row, 1).text()
                 shape = self.tableWidget.cellWidget(row, 7).currentText().strip()[0]
-                print(params)
-                print(label, shape)
+                if shape == 'V':
+                    params = np.append(params, 0.5)
+                elif shape == 'B':
+                    params = np.append(params, 0.02)
                 p = FIT.Peak(FIT, self.data.X, *params, shape = shape)
                 cumulative += p
                 self.subplot.plot(self.data.X, p, label = label)
