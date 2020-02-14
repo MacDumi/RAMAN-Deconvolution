@@ -1,18 +1,16 @@
 # Deconvolution of Raman spectra
 
-Written to deconvolute soot spectra
+Written to deconvolute Raman soot spectra
+
+### Dependencies
+
+Before running this script, please make sure that __Python3__ and all the required libraries are installed by running:
+
+	$pip install numpy, matplotlib, pandas, scipy, recordtype, pyqt5
 
 ## Usage:
 
-	$./Deconvolution.py <FileName>
-
-	$./Deconvolution.py -c <FileName> #converts the *.wdf file to *.txt 
-	$./Deconvolution.py --convert <FileName> #converts the *.wdf file to *.txt 
-
-## Help:
-
-	$./Deconvolution.py --help
-	$./Deconvolution.py -h  
+	$./RD.py
 
 ### Input data format
 
@@ -20,11 +18,23 @@ The data should be in a text file with two columns (Raman shift and Intensity) s
 
 ### Spike detection
 
-The script has an integrated "spike" detector. To detect "spikes" the moving average of two ajacent poins is compared and, if the difference is higher than the threshold value, the point is considered as a spike. If the algorithm fails to detect spikes, the user can specify another threshold value and try again.
+The script has an integrated "spike" detector. To detect "spikes" the moving average of two adjacent points is compared and, if the difference is higher than the threshold value, the point is considered as a spike. If the algorithm fails to detect spikes, the user can specify another threshold value and try again.
 
-### Polynomial degree for the baseline
+### Baseline subtraction 
 
-By default the baseline is calculated using a third degree polynomial function. However, the user is able to change the degree of the poly-function if the baseline does not fit the experimental data. A plot with the calculated baseline and the experimental data is displayed after each attempt.
+By default the baseline is calculated using a third degree polynomial function. However, the user is able to change the degree of the poly-function if the baseline does not fit the experimental data. A preview  of the calculated baseline and the experimental data can be displayed.
+
+### Deconvolution
+
+The deconvolution can be performed with either a conventional least squares method or Markov chains Monte Carlo algorithm (MCMC). 
+Regardless of the method, the shape, bounds and initial guess for all the bands can be adjusted. 
+Currently, 4 peak shapes are supported: Lorentzian, Gaussian, Voigt, and Breit-Wigner-Fano.
+
+### Batch deconvolution
+
+It is possible to deconvolute multiple files at once (only with the least squares method). 
+The user should carefully choose the region of interest and input parameters and ensure that all the spikes are removed. 
+It is possible to choose the number of processes that will be spawned/forked. 
 
 ### Configuration
 
@@ -36,8 +46,5 @@ You can convert wdf files to a more manageable format with the convertwdf.py scr
 
 	$./convertwdf.py <fileName>
 
-### Dependencies
+If the file contains only one spectrum the output will be a text file with two columns, if the file contains multiple spectra a csv file will be created with columns corresponding to each of the present spectra.
 
-Before runnig this script, please make sure that Python3 and following libraries are 
-installed:
-	numpy, matplotlib, pandas, peakutils, scipy, argparse, configparser, recordtype, collections
