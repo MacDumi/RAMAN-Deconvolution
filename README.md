@@ -6,7 +6,7 @@ Written to deconvolute Raman soot spectra
 
 Before running this script, please make sure that __Python3__ and all the required libraries are installed by running:
 
-	$pip install numpy matplotlib pandas scipy recordtype pyqt5
+	$pip install numpy matplotlib pandas scipy recordtype pyqt5 tqdm uncertainties
 
 ## Usage:
 
