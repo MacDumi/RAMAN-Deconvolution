@@ -28,7 +28,7 @@ from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as Navigatio
 Limits = recordtype('Limits', ['min', 'max'])
 
 def BatchWorker(*params):
-    f, names, shape, bsParams, crop, peakLimits, parguess, bounds, index = params
+    f, names, shape, bsParams, crop, peakLimits, parguess, bounds, index, folder = params
     dt = DATA()
     result = pd.Series(name = os.path.basename(f), index = index, dtype = object)
     try:
@@ -64,6 +64,9 @@ def BatchWorker(*params):
         print('Could not deconvolute the {} file'.format(f))
         result.iloc[1:len(index)] = -1*np.ones(len(index)-1)
         print(e)
+    path = folder+ '/' +os.path.basename(f)+'.png'
+    fig = plt.figure(figsize=(12,8))
+    fit.plot(figure = fig, path = path)
     return result
 
 class Worker(QRunnable):
@@ -140,7 +143,10 @@ class BatchDeconvolute(QThread):
         # index = np.append('baseline', ['_'.join(name) for name in itertools.product(self.fit.names, ('Position', 'Amplitude', 'FWHM', 'Area'))])
         out = pd.DataFrame(index = index)
 
-        arguments = self.fit.names, self.fit.shape, self.bsParams[0], self.cropLimits, self.peakLimits, self.parguess, self.bounds, index
+        folder =os.path.dirname(self.files[0])+'/BatchDeconvolution_'+ os.path.splitext(os.path.basename(self.files[0]))[0]
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+        arguments = self.fit.names, self.fit.shape, self.bsParams[0], self.cropLimits, self.peakLimits, self.parguess, self.bounds, index, folder
         arguments = [np.append(f, arguments) for f in self.files]
 
         with ProcessPoolExecutor(max_workers=self.cores) as executor:
@@ -149,8 +155,8 @@ class BatchDeconvolute(QThread):
                 if prog%1==0:
                    self.progress.emit(prog)
                 out[r.name] = r
-        out.to_csv(os.path.dirname(self.files[0])+'/BatchDeconvolutionResults.csv')
-        self.saved.emit(os.path.dirname(self.files[0])+'/BatchDeconvolutionResults.csv')
+        out.to_csv(folder+'/BatchDeconvolutionResults.csv')
+        self.saved.emit(folder+'/BatchDeconvolutionResults.csv')
         if list(out.iloc[2]).count(-1) >0:
             pb = list(out.columns[out.iloc[0] == -1])
             self.finished.emit('<|>'.join(pb))
@@ -825,7 +831,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         [self.tableWidget.setItem(rows, j, QTableWidgetItem(str('--'))) for j in range(1, 7)]
 
         combo = QComboBox()
-        [combo.addItem('  '+s) for s in ['Lorentzian', 'Gaussian']]
+        [combo.addItem('  '+s) for s in ['Lorentzian', 'Gaussian', 'Voigt', 'BWF']]
         self.tableWidget.setCellWidget(rows, 7, combo)
 
     def itemCheck(self, item, **kwargs):
@@ -842,7 +848,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
                 if 'silent' not in kwargs:
                     self.statusbar.showMessage('Not a valid number', 2000)
         elif col == 7:
-            if value not in ['Gaussian', 'Lorentzian']:
+            if value not in ['Gaussian', 'Lorentzian', 'Voigt', 'BWF']:
                 error = True
                 bg = QBrush(Qt.red)
                 if 'silent' not in kwargs:

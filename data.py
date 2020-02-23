@@ -62,7 +62,7 @@ class DATA:
             return data, comments
 
         def crop(self, _min, _max):
-            if int(_min)> self.X[0]:
+            if int(_min)< self.X[0]:
                 _min = self.X[0]
             if int(_max)> self.X[-1]:
                 _max = self.X[-1]

@@ -11,6 +11,8 @@ from scipy.optimize import curve_fit
 from scipy import asarray as ar,exp
 from collections import OrderedDict
 from mcmc import MCMC
+from uncertainties import ufloat, unumpy
+from uncertainties.umath import *
 from PyQt5.QtCore import QObject, pyqtSignal
 
 #Linestyles
@@ -36,7 +38,9 @@ class FIT(QObject):
                 self.shape = shape #used to calculate the number of fitting parameters
                 self.args = [4 if self.shape[i] in ['V', 'B'] else 3 for i in np.arange(0, len(self.shape))]
                 self.peaks = pd.DataFrame()
+                self.peaks_u = pd.DataFrame()
                 self.fwhm = np.zeros(len(self.names))
+                self.fitGoodness = 0
                 self.error = False
 
         @staticmethod
@@ -46,14 +50,17 @@ class FIT(QObject):
                 return I*(1+temp*q)**2/(1+temp**2)
 
         @staticmethod
-        def Voigt(x, I, x0, s, n):
+        def Voigt(x, I, x0, s, n, **kwargs):
                 #voigt peak
-                return n*I/(1+((x - x0)**2 /s**2)) + (1-n)*I*np.exp(-(x-x0)**2/(2*s**2))
+                return n*FIT.lorents(x, I, x0, s) + (1-n)*FIT.gauss(x,I, x0, s, **kwargs)
 
         @staticmethod
-        def gauss(x, I, x0, s):
+        def gauss(x, I, x0, s, **kwargs):
                 #gaussian peak
-                return I*np.exp(-(x-x0)**2/(2*s**2))
+                if kwargs.get('uncert', None):
+                    return I*unumpy.exp(-(x-x0)**2/(2*s**2))
+                else:
+                    return I*np.exp(-(x-x0)**2/(2*s**2))
 
         @staticmethod
         def lorents(x, I, x0, s):
@@ -61,7 +68,7 @@ class FIT(QObject):
                 return I/ (1+((x - x0)**2 /s**2))
 
         @staticmethod
-        def Peak(self, x, *pars, shape):
+        def Peak(self, x, *pars, shape, **kwargs):
                 #returns the peak with the selected shape
                 I = pars[0]
                 gamma = pars[1]
@@ -70,25 +77,25 @@ class FIT(QObject):
                 if (shape =='V'): #if gaussian
                         if len(pars)==4:
                                 v =pars[3]
-                        return FIT.Voigt(x, I, x0, gamma, v)
+                        return FIT.Voigt(x, I, x0, gamma, v, **kwargs)
                 elif shape =='B': #if BWF
                         if len(pars) == 4:
                             v = pars[3]
                         return FIT.BWF(x, I, x0, gamma, v)
                 elif (shape =='G'): #if gaussian
-                        return FIT.gauss(x, I, x0, gamma)
+                        return FIT.gauss(x, I, x0, gamma, **kwargs)
                 elif (shape =='L'): #if lorentzian
                         return FIT.lorents(x, I, x0, gamma)
                 else:
                         print("unknown parameter")
                         return 0
 
-        def model(self, t, *pars):
+        def model(self, t, *pars, **kwargs):
                 #model used for fitting
                 temp =np.zeros(len(t))
                 for i in np.arange(0, len(self.names)):
                         indx = int(np.sum(self.args[:i]))
-                        temp = np.sum((temp, self.Peak(self, t,  *pars[indx:indx+self.args[i]], shape=self.shape[i])), axis=0)
+                        temp = np.sum((temp, self.Peak(self, t,  *pars[indx:indx+self.args[i]], shape=self.shape[i], **kwargs)), axis=0)
                 return temp
 
         def checkParams(self, params, bounds, corr, shape):
@@ -120,20 +127,45 @@ class FIT(QObject):
         def FWHM(self):
                 #returns the full width at half maximum of all the peaks
                 X = self.peaks['freq']
+                self.fwhm = []
                 for i, name in enumerate(self.names):
-                        Y = self.peaks[name]
-                        difference = max(Y) - min(Y)
-                        HM = difference / 2
-                        pos_extremum = Y.idxmax()  # or in your case: arr_y.argmin()
-                        nearest_above = (np.abs(Y[pos_extremum:-1] - HM)).idxmin()
-                        nearest_below = (np.abs(Y[0:pos_extremum] - HM)).idxmin()
-                        self.fwhm[i] = (np.mean(X[nearest_above ]) - np.mean(X[nearest_below]))
+                        Y = self.peaks_u[name].values
+                        Y_n = np.array([i.n for i in Y])
+                        Y_std = np.array([i.s for i in Y])
+                        if not len(Y_n):
+                            self.fwhm = np.zeros(len(self.names))
+                            return -1
+                        nominal = self.width(X, Y_n)
+                        max_val = self.width(X, Y_n+Y_std)
+                        err = np.abs(max_val - nominal)
+                        self.fwhm = np.append(self.fwhm, ufloat(nominal, err))
+
+                #         difference = max(Y) - min(Y)
+                #         HM = difference / 2
+                #         pos_extremum = Y.idxmax()  # or in your case: arr_y.argmin()
+                #         nearest_above = (np.abs(Y[pos_extremum:-1] - HM)).idxmin()
+                #         nearest_below = (np.abs(Y[0:pos_extremum] - HM)).idxmin()
+                #         self.fwhm[i] = (np.mean(X[nearest_above ]) - np.mean(X[nearest_below]))
+
+        def width(self, X, Y):
+                HM = (max(Y) - min(Y))/2
+                if not len(Y):
+                    return -1
+                pos_max = Y.argmax()
+                nearest_above = (np.abs(Y[pos_max:-1] - HM)).argmin()+pos_max
+                nearest_below = (np.abs(Y[0:pos_max] - HM)).argmin()
+                fwhm = (np.mean(X[nearest_above ]) - np.mean(X[nearest_below]))
+                return fwhm
+
+
 
         def Area(self):
                 #integrates all the peaks
                 self.area=[]
+                print(self.peaks_u)
                 for name in self.names:
-                        self.area = np.append(self.area ,np.trapz(self.peaks[name], x = self.peaks['freq']))
+                        self.area = np.append(self.area ,np.trapz(self.peaks_u[name].values, x = self.peaks['freq']))
+                print(self.area)
 
         def decMCMC(self, data, parguess, bounds, steps):
                 #deconvolution with MCMC
@@ -158,11 +190,15 @@ class FIT(QObject):
                     mcmc.step = st
                     self.pars, self.perr = mcmc(data.X, Y, steps, corr = corr )
 
+                    self.pars_u = [ufloat(p, abs(e)) for p, e in zip(self.pars, self.perr)]
                     #Calculate each peak
                     for i, name in enumerate(self.names):
                             indx = int(np.sum(self.args[:i]))
                             self.peaks[name] = self.Peak(self, data.X, *self.pars[indx:indx+self.args[i]], shape =self.shape[i])
+                            self.peaks_u[name] = self.Peak(self, data.X, *self.pars_u[indx:indx+self.args[i]], shape =self.shape[i], uncert = True)
                     self.peaks['cumulative']=self.model(data.X, *self.pars) #save the fit result
+                    self.peaks_u['cumulative']=self.model(data.X, *self.pars_u, uncert=True) #save the fit result
+                    self.fitGoodness = self.goodness(data.current, self.peaks['cumulative'])
                     self.FWHM() #calculate fwhm
                     self.Area() #calculate the areas
                     self.printResult(data) #print the fit report
@@ -198,11 +234,15 @@ class FIT(QObject):
                     self.perr= np.sqrt(np.diag(pcov))
                     self.pars = [par*cor for par, cor in zip(self.pars, corr)]
 
+                    self.pars_u = [ufloat(p, abs(e)) for p, e in zip(self.pars, self.perr)]
                     #Calculate each peak
                     for i, name in enumerate(self.names):
                             indx = int(np.sum(self.args[:i]))
                             self.peaks[name] = self.Peak(self, data.X, *self.pars[indx:indx+self.args[i]], shape =self.shape[i])
+                            self.peaks_u[name] = self.Peak(self, data.X, *self.pars_u[indx:indx+self.args[i]], shape =self.shape[i], uncert = True)
                     self.peaks['cumulative']=self.model(data.X, *self.pars) #save the fit result
+                    self.peaks_u['cumulative']=self.model(data.X, *self.pars_u, uncert=True) #save the fit result
+                    self.fitGoodness = self.goodness(data.current, self.peaks['cumulative'])
                     self.FWHM() #calculate fwhm
                     self.Area() #calculate the areas
                     if not batch:
@@ -216,14 +256,29 @@ class FIT(QObject):
                         self.error = True
                         print('Failed to deconvolute...\nTry with different bounds:\n', e)
 
-        def plot(self, *args):
+        def goodness(self, data, fit):
+            # residual sum of squares
+            ss_res = np.sum((data - fit) ** 2)
+
+            # total sum of squares
+            ss_tot = np.sum((data - np.mean(data)) ** 2)
+
+            # r-squared
+            r2 = 1 - (ss_res / ss_tot)
+            return r2
+
+
+        def plot(self, *args, **kwargs):
                 #plot overlapping peaks with or without the baseline
+                path = kwargs.get('path', None)
+                fig = kwargs.get('figure', None)
+                if not fig:
+                    return -1
                 baseline = np.zeros(len(self.peaks['freq']))
-                if len(args)==1:
+                if kwargs.get('baseline'):
                         baseline = args[0]
-                fig = plt.figure(figsize=(12,8))
                 ax = fig.add_subplot(111)
-                ax.scatter(self.peaks['freq'], self.peaks['exp']+baseline, s=70,linewidth=1.5, facecolors = 'none', edgecolor = '#1E68FF',label='Experimental data')
+                ax.plot(self.peaks['freq'], self.peaks['exp']+baseline,label='Experimental data')
                 ax.plot(self.peaks['freq'], self.peaks['cumulative']+baseline, 'r-',linewidth = 1, label='Cumulative')
                 for i, name in enumerate(self.names):
                         ax.plot(self.peaks['freq'], self.peaks[name]+baseline, linewidth = 2,linestyle = ln_style[i][1], label =name)
@@ -232,27 +287,31 @@ class FIT(QObject):
                 ax.legend()
                 ax.grid()
                 plt.tight_layout()
-                plt.show()
-                return fig
+                if path:
+                    plt.savefig(path)
+                # plt.show()
+                # return fig
 
         def printResult(self, data):
                 #Print the fit report
                 text = "****************BASELINE*******************\nDegree: %d\nCoefficients (starting with the highest power):\n"%data.bsDegree
                 text = text + str(data.bsCoef)
                 text = text +"\n****************FIT RESULTS****************\n"
+                text += "Goodness (R^2): {}\n\n".format(self.fitGoodness)
                 self.intensity = []
                 for i, name in enumerate(self.names):
                         indx = int(np.sum(self.args[:i]))
                         params = self.pars[indx:indx+self.args[i]]
                         errs = self.perr[indx:indx+self.args[i]]
-                        text = text +"Peak %s:\n    Center: %.4f +/- %.4f cm-1\n    Amplitude: %.4f +/- %.4f\n    gamma: %.4f +/- %.4f\n    FWHM: %.4f\n"%(name,
-                                params[2], errs[2], params[0], errs[0], params[1], errs[1], self.fwhm[i])
+                        text = text +"Peak %s:\n    Center: %.4f +/- %.4f cm-1\n    Amplitude: %.4f +/- %.4f\n    gamma: %.4f +/- %.4f\n"%(name,
+                                params[2], errs[2], params[0], errs[0], params[1], errs[1])
+                        text += "    FWHM: {:10.4f}\n".format(self.fwhm[i])
                         if self.shape[i]=='V':
                                 text = text +"    L/G ratio = %.4f\n" %params[3]
                         elif self.shape[i]=='B':
                                 text = text +"    Asymmetry factor 1/q = %.4f\n" %params[3]
                         self.intensity = np.append(self.intensity, params[0])
-                        text = text +"    Area = %.4f\n\n" %self.area[i]
+                        text = text +"    Area = {:10.4f}\n\n".format(self.area[i])
                 # text = text +"\n**************Ratio - Amplitude************\n   D1/G= %.4f\n    D4/G= %.4f\n" %(self.intensity[1]/self.intensity[3], self.intensity[0]/self.intensity[3])
                 '''
                 if len(self.intensity)==5:
