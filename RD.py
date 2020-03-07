@@ -22,8 +22,8 @@ import itertools
 import multiprocessing as mp
 from multiprocessing import Pool, cpu_count, Value
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
 Limits = recordtype('Limits', ['min', 'max'])
 
@@ -531,6 +531,11 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         if np.shape(self.data.baseline):
             self.data.setData(self.data.X, self.data.Y.copy())
         self.Plot(self.data.X, self.data.current, 'Experimental data')
+
+        if self.peakLimits.min <= self.data.X[0]:
+            self.peakLimits.min = round(self.data.X[0] + 0.25*(self.data.X[-1]-self.data.X[0]))
+        if self.peakLimits.max >= self.data.X[-1]:
+            self.peakLimits.max = round(self.data.X[-1] - 0.25*(self.data.X[-1]-self.data.X[0]))
         dialog = BaselineDialog(self.degree, self.peakLimits.min, self.peakLimits.max)
         dialog.btPreview.clicked.connect(lambda: self.previewBaseline(dialog))
         self.previewBaseline(dialog)
