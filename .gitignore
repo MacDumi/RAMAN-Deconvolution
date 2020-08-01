@@ -1,6 +1,13 @@
+# Misc
 matplotlib
 __pycache__/
 elements.py
 molmass.py
+# Design files
 *.ui
+# Test file
 test*
+# Virtual environment
+bin/
+lib/
+pyvenv.cfg
