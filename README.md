@@ -8,7 +8,7 @@ This application is designed for deconvolution of Raman spectra.
 
 Before running this script, please make sure that __Python3__ and all the required libraries are installed by running:
 
-    $ pip install numpy matplotlib pandas scipy recordtype pyqt5 tqdm uncertainties
+    $ pip install -r requirements
 
 ## Usage:
 
