@@ -1,16 +1,18 @@
 # Deconvolution of Raman spectra
 
-Written to deconvolute Raman soot spectra
+This application is designed for deconvolution of Raman spectra.
+
+![Screenshot](/screenshots/RamanDeconvolution.png)
 
 ### Dependencies
 
 Before running this script, please make sure that __Python3__ and all the required libraries are installed by running:
 
-	$pip install numpy matplotlib pandas scipy recordtype pyqt5 tqdm uncertainties
+    $ pip install numpy matplotlib pandas scipy recordtype pyqt5 tqdm uncertainties
 
 ## Usage:
 
-	$python RD.py
+    $ python RD.py
 
 ### Input data format
 
@@ -44,7 +46,7 @@ To change the initial guess, bounds and the shape of peaks, edit the ./config/in
 ### WDF conversion
 You can convert wdf files to a more manageable format with the convertwdf.py script
 
-	$./convertwdf.py <fileName>
+    $./convertwdf.py <fileName>
 
 If the file contains only one spectrum the output will be a text file with two columns, if the file contains multiple spectra a csv file will be created with columns corresponding to each of the present spectra.
 
