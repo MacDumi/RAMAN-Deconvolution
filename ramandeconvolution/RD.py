@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 import matplotlib
 matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
@@ -19,55 +19,63 @@ from PyQt5.QtWidgets import *
 from recordtype import recordtype
 from distutils.util import strtobool
 import itertools
+import queue
 import multiprocessing as mp
-from multiprocessing import Pool, cpu_count, Value
+from multiprocessing import Pool, cpu_count, Value, Process, Queue
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
 Limits = recordtype('Limits', ['min', 'max'])
 
-def BatchWorker(*params):
-    f, names, shape, bsParams, crop, peakLimits, parguess, bounds, index, folder = params
-    dt = DATA()
-    result = pd.Series(name = os.path.basename(f), index = index, dtype = object)
-    try:
-        dt.loadData(f)
-        dt.crop(crop.min, crop.max)
-        dt.fitBaseline(bsParams, peakLimits, abs = True)
+def BatchWorker(file_queue, results_queue, names, shape, bsParams, crop,
+                            peakLimits, parguess, bounds, index, folder):
+    result = pd.Series(index = index, dtype = object)
+    while True:
+        try:
+            fname = file_queue.get_nowait()
+            result.name = os.path.basename(fname)
+            dt = DATA()
+            try:
+                dt.loadData(fname)
+                dt.crop(crop.min, crop.max)
+                dt.fitBaseline(bsParams, peakLimits, abs = True)
 
-        text = ''
-        for deg in np.arange(0, dt.bsDegree+1):
-            if dt.bsCoef[deg]>=0 and deg!=0:
-                text += '+'
-            text += '{:.4E}*x^{}'.format(dt.bsCoef[deg], dt.bsDegree-deg)
-        result.loc['baseline'] = text
-    except Exception as e:
-        print("Error {}".format(e))
-    try:
-        fit = FIT(shape, names)
-        fit.deconvolute(dt, parguess, bounds, batch=True)
-        for i, pars in enumerate(zip(names, shape)):
-            result.loc[pars[0]+'_'+'Position'] = fit.pars[int(np.sum(fit.args[:i])+2)]
-            result.loc[pars[0]+'_'+'Amplitude'] = fit.pars[int(np.sum(fit.args[:i]))]
-            result.loc[pars[0]+'_'+'FWHM'] = fit.fwhm[i]
-            result.loc[pars[0]+'_'+'Area'] = fit.area[i]
-            if pars[1] == 'V':
-                result.loc[pars[0]+'_'+'L/G'] = fit.pars[int(np.sum(fit.args[:i])+3)]
-            elif pars[1] == 'B':
-                result.loc[pars[0]+'_'+'1/q'] = fit.pars[int(np.sum(fit.args[:i])+3)]
-        # result.iloc[1::4] = fit.pars[2::3]
-        # result.iloc[2::4] = fit.pars[::3]
-        # result.iloc[3::4] = fit.fwhm
-        # result.iloc[4::4] = fit.area
-    except Exception as e:
-        print('Could not deconvolute the {} file'.format(f))
-        result.iloc[1:len(index)] = -1*np.ones(len(index)-1)
-        print(e)
-    path = folder+ '/' +os.path.basename(f)+'.png'
-    fig = plt.figure(figsize=(12,8))
-    fit.plot(figure = fig, path = path)
-    return result
+                text = ''
+                for deg in np.arange(0, dt.bsDegree+1):
+                    if dt.bsCoef[deg]>=0 and deg!=0:
+                        text += '+'
+                    text += f'{dt.bsCoef[deg]:.4E}*x^{dt.bsDegree-deg}'
+                result.loc['baseline'] = text
+            except Exception as e:
+                print("Error {}".format(e))
+            try:
+                fit = FIT(shape, names)
+                fit.deconvolute(dt, parguess.copy(), bounds.copy(), batch=True)
+                for i, pars in enumerate(zip(names, shape)):
+                    result.loc[pars[0]+'_'+'Position'] = fit.pars[int(
+                                                       np.sum(fit.args[:i])+2)]
+                    result.loc[pars[0]+'_'+'Amplitude'] = fit.pars[int(
+                                                       np.sum(fit.args[:i]))]
+                    result.loc[pars[0]+'_'+'FWHM'] = fit.fwhm[i]
+                    result.loc[pars[0]+'_'+'Area'] = fit.area[i]
+                    if pars[1] == 'V':
+                        result.loc[pars[0]+'_'+'L/G'] = fit.pars[int(
+                                                       np.sum(fit.args[:i])+3)]
+                    elif pars[1] == 'B':
+                        result.loc[pars[0]+'_'+'1/q'] = fit.pars[int(
+                                                       np.sum(fit.args[:i])+3)]
+            except Exception as e:
+                print('Could not deconvolute the {} file'.format(f))
+                result.iloc[1:len(index)] = -1*np.ones(len(index)-1)
+                print(e)
+            path = folder+ '/' + os.path.basename(fname)+'.png'
+            fig = plt.figure(figsize=(12,8))
+            fit.plot(figure=fig, path=path)
+            results_queue.put('|'.join(np.append(result.name,
+                                                    result.values.astype(str))))
+        except queue.Empty:
+            break
 
 class Worker(QRunnable):
     '''
@@ -106,10 +114,13 @@ class Deconvolute(QThread):
             print('Something went wrong: ', e)
 
 class BatchDeconvolute(QThread):
-    error = pyqtSignal()
-    finished = pyqtSignal(str, name='finished')
-    saved = pyqtSignal(str, name='saved')
-    progress = pyqtSignal(int, name='progress')
+    # Various sygnals
+    error           = pyqtSignal()
+    finished        = pyqtSignal(str, name='finished')
+    procs_ready     = pyqtSignal(name='ready')
+    building_output = pyqtSignal(name='building')
+    output_saved    = pyqtSignal(str, name='saved')
+    progress        = pyqtSignal(int, name='progress')
 
     def __init__(self, _files, _parguess, _bounds, _fit, _params):
         QThread.__init__(self)
@@ -119,9 +130,12 @@ class BatchDeconvolute(QThread):
         self.cores = _params[0]
         self.bsParams = _params[1:]
         self.fit = _fit
+        self.results          = Queue()
+        self.files_to_process = Queue()
+        self.cancel_job = False
 
     def run(self):
-        #create N processes that will read files and deconvolute them
+        # Create N processes that will read files and deconvolute them
         try:
             _min = int(self.bsParams[1])
             _max = int(self.bsParams[2])
@@ -135,40 +149,82 @@ class BatchDeconvolute(QThread):
 
         index = ['baseline']
         for name, s in zip(self.fit.names, self.fit.shape):
-            index = np.append(index, [name+'_'+nm for nm in ('Position', 'Amplitude', 'FWHM', 'Area')])
+            index = np.append(index, [name+'_'+nm for nm in
+                                    ('Position', 'Amplitude', 'FWHM', 'Area')])
             if s == 'V':
                 index = np.append(index, '_'.join((name, 'L/G')))
             elif s == 'B':
                 index = np.append(index, '_'.join((name, '1/q')))
-        # index = np.append('baseline', ['_'.join(name) for name in itertools.product(self.fit.names, ('Position', 'Amplitude', 'FWHM', 'Area'))])
         out = pd.DataFrame(index = index)
 
-        folder =os.path.dirname(self.files[0])+'/BatchDeconvolution_'+ os.path.splitext(os.path.basename(self.files[0]))[0]
+        folder  = os.path.dirname(self.files[0])+'/BatchDeconvolution_'
+        folder += os.path.splitext(os.path.basename(self.files[0]))[0]
         if not os.path.exists(folder):
             os.makedirs(folder)
-        arguments = self.fit.names, self.fit.shape, self.bsParams[0], self.cropLimits, self.peakLimits, self.parguess, self.bounds, index, folder
-        arguments = [np.append(f, arguments) for f in self.files]
+        arguments = [self.fit.names, self.fit.shape, self.bsParams[0],
+                    self.cropLimits, self.peakLimits, self.parguess,
+                    self.bounds, index, folder]
 
-        with ProcessPoolExecutor(max_workers=self.cores) as executor:
-            for i, r in enumerate(executor.map(BatchWorker, *np.transpose(arguments))):
-                prog = int(i*100/len(self.files))
-                if prog%1==0:
-                   self.progress.emit(prog)
-                out[r.name] = r
-        out.to_csv(folder+'/BatchDeconvolutionResults.csv')
-        self.saved.emit(folder+'/BatchDeconvolutionResults.csv')
-        if list(out.iloc[2]).count(-1) >0:
-            pb = list(out.columns[out.iloc[0] == -1])
-            self.finished.emit('<|>'.join(pb))
+        # Fill the queue with files to process
+        for file in self.files:
+            self.files_to_process.put(file)
+
+        # Create all the processes
+        processes = []
+        for w in range(self.cores):
+            args = [self.files_to_process, self.results] + arguments
+            p = Process(target=BatchWorker, args=args)
+            processes.append(p)
+
+        self.procs_ready.emit()
+
+        # Start all the processes
+        for p in processes:
+            p.start()
+
+        # Update the slider
+        prev = 0
+        while self.files_to_process.qsize():
+            prog = int(100 * (len(self.files) - self.files_to_process.qsize())
+                                                            / len(self.files))
+            if prog != prev :
+               self.progress.emit(prog)
+               prev = prog
+
+        # Wait for the processes to finish
+        for p in processes:
+            p.join()
+
+        if not self.cancel_job:
+            self.building_output.emit()
+            # Process the results from the queue
+            while not self.results.empty():
+                res = self.results.get().split('|')
+                out[res[0]] = res[1:]
+            out.to_csv(folder+'/BatchDeconvolutionResults.csv')
+            self.saved.emit(folder+'/BatchDeconvolutionResults.csv')
+            if list(out.iloc[2]).count(-1) >0:
+                pb = list(out.columns[out.iloc[0] == -1])
+                self.finished.emit('<|>'.join(pb))
+            else:
+                self.finished.emit('OK')
         else:
-            self.finished.emit('OK')
+            self.error.emit()
 
+    def cancel(self):
+        # Cancel the batch deconvolution
+        self.cancel_job = True
+        while True:
+            # Remove all the remaining files from the queue
+            try:
+                self.files_to_process.get_nowait()
+            except queue.Empty:
+                break
 
 class RD(QMainWindow, gui.Ui_MainWindow):
 
     header  = 50*'*'+'\n\n'+10*' '+'DECONVOLUTION OF RAMAN SPECTRA'
     header += 10*''+'\n\n'+50*'*'
-
 
     def __init__(self):
         super(RD, self).__init__()
@@ -451,17 +507,22 @@ class RD(QMainWindow, gui.Ui_MainWindow):
         if not np.shape(parguess):
             return
         bounds = [lower, upper]
-        progress = QProgressDialog("Deconvoluting", "Cancel", 0, 100)
-        progress.setCancelButton(None)
+        progress = QProgressDialog(f"Creating {params[0]} processes", "Cancel", 0, 100)
+        progress.setMinimumWidth(300)
+        progress.setWindowTitle("Batch deconvolution")
         progress.show()
         progress.setValue(0)
         self.batch = BatchDeconvolute(fnames, parguess, bounds, self.fit, params)
+
+        progress.canceled.connect(self.batch.cancel)
         self.textOut.clear()
         self.subplot.clear()
 
         self.batch.progress.connect(progress.setValue)
+        self.batch.procs_ready.connect(lambda: progress.setLabelText("Deconvoluting"))
+        self.batch.building_output.connect(lambda: progress.setLabelText("Building the output"))
         self.batch.finished.connect(lambda x: [progress.setValue(100), self.errorBox('Some files were not deconvoluted...') if x!='OK' else print('all done')])
-        self.batch.error.connect(lambda: [progress.setValue(100), self.errorBox("Wrong parameters...")])
+        self.batch.error.connect(lambda: [progress.setValue(100), print("job canceled")])
         self.batch.saved.connect(lambda x:[self.textOut.append('Results are saved at {}'.format(x)), self.dockOut.raise_()])
         self.batch.start()
 
@@ -955,6 +1016,7 @@ class RD(QMainWindow, gui.Ui_MainWindow):
 
 
 if __name__ == '__main__':
+    mp.set_start_method('spawn')
     app = QApplication([sys.argv])
     application = RD()
     application.show()
