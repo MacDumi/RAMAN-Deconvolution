@@ -49,15 +49,15 @@ def BatchWorker(file_queue, results_queue, names, shape, bsParams, crop,
                     elif pars[1] == 'B':
                         result.loc[pars[0]+'_'+'1/q'] = fit.pars[int(
                                                        np.sum(fit.args[:i])+3)]
+                path = folder+ '/' + os.path.basename(fname)+'.png'
+                fig = plt.figure(figsize=(12,8))
+                fit.plot(figure=fig, path=path)
+                results_queue.put('|'.join(np.append(result.name,
+                                                   result.values.astype(str))))
             except Exception as e:
                 print(f'Could not deconvolute the {fname} file')
                 result.iloc[1:len(index)] = -1*np.ones(len(index)-1)
                 print(e)
-            path = folder+ '/' + os.path.basename(fname)+'.png'
-            fig = plt.figure(figsize=(12,8))
-            fit.plot(figure=fig, path=path)
-            results_queue.put('|'.join(np.append(result.name,
-                                                    result.values.astype(str))))
         except queue.Empty:
             break
 
