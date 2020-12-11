@@ -380,6 +380,8 @@ class RD(QMainWindow, main_gui):
                        self.errorBox('Some files were not deconvoluted...')
                                         if x!='OK' else print('all done')])
         self.batch.error.connect(
+                 lambda x: self.errorBox(x.split('|')[1], x.split('|')[0]))
+        self.batch.was_canceled.connect(
                    lambda: [progress.setValue(100), print("job canceled")])
         self.batch.saved.connect(
                 lambda x:[self.textOut.append(f'Results are saved at {x}'),

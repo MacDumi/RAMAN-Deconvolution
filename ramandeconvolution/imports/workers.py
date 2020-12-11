@@ -12,8 +12,8 @@ from .data import DATA
 
 Limits = recordtype('Limits', ['min', 'max'])
 
-def BatchWorker(file_queue, results_queue, names, shape, bsParams, crop,
-                            peakLimits, parguess, bounds, index, folder):
+def BatchWorker(file_queue, results_queue, error_queue, names, shape, bsParams,
+                            crop, peakLimits, parguess, bounds, index, folder):
     result = pd.Series(index = index, dtype = object)
     while True:
         try:
@@ -51,7 +51,10 @@ def BatchWorker(file_queue, results_queue, names, shape, bsParams, crop,
                                                        np.sum(fit.args[:i])+3)]
                 path = folder+ '/' + os.path.basename(fname)+'.png'
                 fig = plt.figure(figsize=(12,8))
-                fit.plot(figure=fig, path=path)
+                try:
+                    fit.plot(figure=fig, path=path)
+                except FileNotFoundError:
+                    error_queue.put('MAXLENGTH')
                 results_queue.put('+|+'.join(np.append(result.name,
                                                    result.values.astype(str))))
             except Exception as e:
@@ -99,7 +102,8 @@ class Deconvolute(QThread):
 
 class BatchDeconvolute(QThread):
     # Various sygnals
-    error           = pyqtSignal()
+    error           = pyqtSignal(str, name='error')
+    was_canceled    = pyqtSignal()
     finished        = pyqtSignal(str, name='finished')
     procs_ready     = pyqtSignal(name='ready')
     output_saved    = pyqtSignal(str, name='saved')
@@ -115,6 +119,7 @@ class BatchDeconvolute(QThread):
         self.fit = _fit
         self.results          = Queue()
         self.files_to_process = Queue()
+        self.error_queue      = Queue()
         self.cancel_job = False
 
     def run(self):
@@ -125,7 +130,8 @@ class BatchDeconvolute(QThread):
             _crop_min = int(self.bsParams[3])
             _crop_max = int(self.bsParams[4])
         except ValueError:
-            self.error.emit()
+            self.error.emit('Initial parameters: Value error')
+            return
 
         self.cropLimits = Limits(_crop_min, _crop_max)
         self.peakLimits = Limits(_min, _max)
@@ -155,7 +161,8 @@ class BatchDeconvolute(QThread):
         # Create all the processes
         processes = []
         for w in range(self.cores):
-            args = [self.files_to_process, self.results] + arguments
+            args = [self.files_to_process, self.results,
+                                                  self.error_queue] + arguments
             p = Process(target=BatchWorker, args=args)
             processes.append(p)
 
@@ -188,7 +195,11 @@ class BatchDeconvolute(QThread):
             else:
                 self.finished.emit('OK')
         else:
-            self.error.emit()
+            self.was_canceled.emit()
+        if not self.error_queue.empty():
+            err  = 'MAX_PATH error|'
+            err += 'Please disable the 260 char limit or use a shorter name'
+            self.error.emit(err)
 
     def cancel(self):
         # Cancel the batch deconvolution
