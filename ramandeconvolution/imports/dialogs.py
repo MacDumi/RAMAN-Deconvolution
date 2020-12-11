@@ -1,18 +1,17 @@
 #!/usr/bin/python3
-import baseline_dialog
-import batch_dialog
-import crop_dialog
-import spike_dialog
-import smooth_dialog
-import deconvolution
-from fit import FIT
-from data import DATA
+from .baseline_dialog import Ui_Dialog as baseline_diag
+from .batch_dialog import Ui_Dialog as batch_diag
+from .crop_dialog import Ui_Dialog as crop_diag
+from .spike_dialog import Ui_Dialog as spike_diag
+from .smooth_dialog import Ui_Dialog as smooth_diag
+from .fit import FIT
+from .data import DATA
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 
 "Smooth dialog"
-class SmoothDialog (QDialog, smooth_dialog.Ui_Dialog):
+class SmoothDialog (QDialog, smooth_diag):
     def __init__(self):
         super(SmoothDialog, self).__init__()
         self.setupUi(self)
@@ -20,7 +19,7 @@ class SmoothDialog (QDialog, smooth_dialog.Ui_Dialog):
         self.slider.valueChanged.connect(lambda : self.lb_value.setText("%d"%int(2*self.slider.value()+1)))
 
 "Spike dialog"
-class SpikeDialog (QDialog, spike_dialog.Ui_Dialog):
+class SpikeDialog (QDialog, spike_diag):
     def __init__(self, threshold):
         super(SpikeDialog, self).__init__()
         self.setupUi(self)
@@ -30,7 +29,7 @@ class SpikeDialog (QDialog, spike_dialog.Ui_Dialog):
         self.slider.valueChanged.connect(lambda : self.lb_value.setText("%d"%self.slider.value()))
 
 "Crop dialog"
-class CropDialog (QDialog, crop_dialog.Ui_Dialog):
+class CropDialog (QDialog, crop_diag):
     def __init__(self, _min, _max):
         super(CropDialog, self).__init__()
         self.setupUi(self)
@@ -45,7 +44,7 @@ class CropDialog (QDialog, crop_dialog.Ui_Dialog):
         return _min, _max
 
 "Baseline dialog"
-class BaselineDialog(QDialog, baseline_dialog.Ui_Dialog):
+class BaselineDialog(QDialog, baseline_diag):
     def __init__(self, _deg, _min, _max):
         super(BaselineDialog, self).__init__()
         self.setupUi(self)
@@ -60,7 +59,7 @@ class BaselineDialog(QDialog, baseline_dialog.Ui_Dialog):
         return self.comboBox.currentIndex(), self.spinBox.value(), _min, _max
 
 "Batch dialog"
-class BatchDialog(QDialog, batch_dialog.Ui_Dialog):
+class BatchDialog(QDialog, batch_diag):
     def __init__(self, _files, _deg, _min, _max, _crop_min, _crop_max, _cores):
         super(BatchDialog, self).__init__()
         self.setupUi(self)
