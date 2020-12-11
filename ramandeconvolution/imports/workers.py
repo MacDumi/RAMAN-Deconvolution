@@ -32,7 +32,7 @@ def BatchWorker(file_queue, results_queue, names, shape, bsParams, crop,
                     text += f'{dt.bsCoef[deg]:.4E}*x^{dt.bsDegree-deg}'
                 result.loc['baseline'] = text
             except Exception as e:
-                print("Error {}".format(e))
+                print(f"Error {e}")
             try:
                 fit = FIT(shape, names)
                 fit.deconvolute(dt, parguess.copy(), bounds.copy(), batch=True)
@@ -50,7 +50,7 @@ def BatchWorker(file_queue, results_queue, names, shape, bsParams, crop,
                         result.loc[pars[0]+'_'+'1/q'] = fit.pars[int(
                                                        np.sum(fit.args[:i])+3)]
             except Exception as e:
-                print('Could not deconvolute the {} file'.format(f))
+                print(f'Could not deconvolute the {fname} file')
                 result.iloc[1:len(index)] = -1*np.ones(len(index)-1)
                 print(e)
             path = folder+ '/' + os.path.basename(fname)+'.png'
