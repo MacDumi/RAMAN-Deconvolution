@@ -323,6 +323,9 @@ class FIT(QObject):
         ax.grid()
         plt.tight_layout()
         if path:
+            fname = os.path.basename(path)
+            if len(fname) > 100:
+                path = os.path.join(os.path.dirname(path), fname[-100:])
             plt.savefig(path)
 
     def printResult(self, data):

@@ -375,8 +375,6 @@ class RD(QMainWindow, main_gui):
         self.batch.progress.connect(progress.setValue)
         self.batch.procs_ready.connect(
                             lambda: progress.setLabelText("Deconvoluting"))
-        self.batch.building_output.connect(
-                      lambda: progress.setLabelText("Building the output"))
         self.batch.finished.connect(
                                          lambda x: [progress.setValue(100),
                        self.errorBox('Some files were not deconvoluted...')

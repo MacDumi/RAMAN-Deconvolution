@@ -52,7 +52,7 @@ def BatchWorker(file_queue, results_queue, names, shape, bsParams, crop,
                 path = folder+ '/' + os.path.basename(fname)+'.png'
                 fig = plt.figure(figsize=(12,8))
                 fit.plot(figure=fig, path=path)
-                results_queue.put('|'.join(np.append(result.name,
+                results_queue.put('+|+'.join(np.append(result.name,
                                                    result.values.astype(str))))
             except Exception as e:
                 print(f'Could not deconvolute the {fname} file')
@@ -102,7 +102,6 @@ class BatchDeconvolute(QThread):
     error           = pyqtSignal()
     finished        = pyqtSignal(str, name='finished')
     procs_ready     = pyqtSignal(name='ready')
-    building_output = pyqtSignal(name='building')
     output_saved    = pyqtSignal(str, name='saved')
     progress        = pyqtSignal(int, name='progress')
 
@@ -167,24 +166,20 @@ class BatchDeconvolute(QThread):
             p.start()
 
         # Update the slider
-        prev = 0
-        while self.files_to_process.qsize():
-            prog = int(100 * (len(self.files) - self.files_to_process.qsize())
-                                                            / len(self.files))
-            if prog != prev :
-               self.progress.emit(prog)
-               prev = prog
+        prog = 0
+        while prog < len(self.files) and not self.cancel_job:
+            if not self.results.empty():
+                res = self.results.get().split('+|+')
+                out[res[0]] = res[1:]
+                prog += 1
+                self.progress.emit(int(100*prog/len(self.files)))
 
         # Wait for the processes to finish
         for p in processes:
             p.join()
 
         if not self.cancel_job:
-            self.building_output.emit()
             # Process the results from the queue
-            while not self.results.empty():
-                res = self.results.get().split('|')
-                out[res[0]] = res[1:]
             out.to_csv(folder+'/BatchDeconvolutionResults.csv')
             self.saved.emit(folder+'/BatchDeconvolutionResults.csv')
             if list(out.iloc[2]).count(-1) >0:
