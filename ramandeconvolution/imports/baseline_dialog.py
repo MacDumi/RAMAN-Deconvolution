@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'baseline_dialog.ui'
+# Form implementation generated from reading ui file 'imports/baseline_dialog.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.2
 #
@@ -16,7 +16,7 @@ class Ui_Dialog(object):
         Dialog.setObjectName("Dialog")
         Dialog.resize(355, 342)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("../graphics/icon.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap("imports/../graphics/icon.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         Dialog.setWindowIcon(icon)
         self.gridLayout = QtWidgets.QGridLayout(Dialog)
         self.gridLayout.setObjectName("gridLayout")

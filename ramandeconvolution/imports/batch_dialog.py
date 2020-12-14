@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'batchDeconv.ui'
+# Form implementation generated from reading ui file 'imports/batchDeconv.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.2
 #
@@ -16,7 +16,7 @@ class Ui_Dialog(object):
         Dialog.setObjectName("Dialog")
         Dialog.resize(280, 455)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("../graphics/batch.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap("imports/../graphics/batch.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         Dialog.setWindowIcon(icon)
         self.gridLayout_3 = QtWidgets.QGridLayout(Dialog)
         self.gridLayout_3.setContentsMargins(0, -1, -1, -1)

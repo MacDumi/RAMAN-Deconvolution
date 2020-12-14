@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'crop_dialog.ui'
+# Form implementation generated from reading ui file 'imports/crop_dialog.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.2
 #
@@ -17,7 +17,7 @@ class Ui_Dialog(object):
         Dialog.resize(284, 145)
         Dialog.setMaximumSize(QtCore.QSize(284, 145))
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("../graphics/icon.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap("imports/../graphics/icon.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         Dialog.setWindowIcon(icon)
         self.gridLayout = QtWidgets.QGridLayout(Dialog)
         self.gridLayout.setObjectName("gridLayout")
