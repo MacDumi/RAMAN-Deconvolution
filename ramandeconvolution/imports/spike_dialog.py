@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'imports/spike_dialog.ui'
+# Form implementation generated from reading ui file 'spike_dialog.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.2
 #
@@ -15,14 +15,14 @@ class Ui_Dialog(object):
     def setupUi(self, Dialog):
         Dialog.setObjectName("Dialog")
         Dialog.setEnabled(True)
-        Dialog.resize(309, 144)
+        Dialog.resize(309, 148)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
         sizePolicy.setHeightForWidth(Dialog.sizePolicy().hasHeightForWidth())
         Dialog.setSizePolicy(sizePolicy)
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("imports/../graphics/icon.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap("../graphics/icon.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         Dialog.setWindowIcon(icon)
         self.verticalLayout = QtWidgets.QVBoxLayout(Dialog)
         self.verticalLayout.setObjectName("verticalLayout")
@@ -50,7 +50,7 @@ class Ui_Dialog(object):
         self.horizontalLayout.addWidget(self.slider)
         self.lb_value = QtWidgets.QLabel(self.frame)
         font = QtGui.QFont()
-        font.setPointSize(12)
+        font.setPointSize(13)
         self.lb_value.setFont(font)
         self.lb_value.setObjectName("lb_value")
         self.horizontalLayout.addWidget(self.lb_value)

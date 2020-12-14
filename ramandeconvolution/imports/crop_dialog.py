@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'imports/crop_dialog.ui'
+# Form implementation generated from reading ui file 'crop_dialog.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.2
 #
@@ -17,13 +17,13 @@ class Ui_Dialog(object):
         Dialog.resize(284, 145)
         Dialog.setMaximumSize(QtCore.QSize(284, 145))
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("imports/../graphics/icon.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap("../graphics/icon.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         Dialog.setWindowIcon(icon)
         self.gridLayout = QtWidgets.QGridLayout(Dialog)
         self.gridLayout.setObjectName("gridLayout")
         self.label = QtWidgets.QLabel(Dialog)
         font = QtGui.QFont()
-        font.setPointSize(16)
+        font.setPointSize(14)
         font.setBold(True)
         font.setWeight(75)
         self.label.setFont(font)
@@ -31,9 +31,15 @@ class Ui_Dialog(object):
         self.label.setObjectName("label")
         self.gridLayout.addWidget(self.label, 0, 0, 1, 3)
         self.lineEdit_min = QtWidgets.QLineEdit(Dialog)
+        font = QtGui.QFont()
+        font.setPointSize(13)
+        self.lineEdit_min.setFont(font)
         self.lineEdit_min.setObjectName("lineEdit_min")
         self.gridLayout.addWidget(self.lineEdit_min, 2, 0, 1, 1)
         self.lineEdit_max = QtWidgets.QLineEdit(Dialog)
+        font = QtGui.QFont()
+        font.setPointSize(13)
+        self.lineEdit_max.setFont(font)
         self.lineEdit_max.setObjectName("lineEdit_max")
         self.gridLayout.addWidget(self.lineEdit_max, 2, 2, 1, 1)
         self.buttonBox = QtWidgets.QDialogButtonBox(Dialog)

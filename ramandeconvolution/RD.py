@@ -283,6 +283,7 @@ class RD(QMainWindow, main_gui):
         progress = QProgressDialog("Processing...", "Cancel", 0, 100)
         progress.setMinimumWidth(300)
         progress.setWindowTitle("Deconvolution")
+        progress.setWindowIcon(QIcon('graphics/icon.svg'))
         progress.setCancelButton(None)
         progress.show()
         progress.setValue(5)
@@ -305,6 +306,7 @@ class RD(QMainWindow, main_gui):
         progress = QProgressDialog("Processing...", "Cancel", 0, 100)
         progress.setMinimumWidth(300)
         progress.setWindowTitle("MCMC deconvolution")
+        progress.setWindowIcon(QIcon('graphics/icon.svg'))
         progress.setCancelButton(None)
         progress.show()
         progress.setValue(0)
@@ -362,6 +364,7 @@ class RD(QMainWindow, main_gui):
         progress = QProgressDialog(f"Creating {params[0]} processes",
                                                         "Cancel", 0, 100)
         progress.setMinimumWidth(300)
+        progress.setWindowIcon(QIcon('graphics/icon.svg'))
         progress.setWindowTitle("Batch deconvolution")
         progress.show()
         progress.setValue(0)
