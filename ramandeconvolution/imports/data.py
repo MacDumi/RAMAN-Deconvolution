@@ -28,7 +28,10 @@ class DATA:
             self.loadData(path[:-3]+'txt')
         else:
             try:
-                dt = np.loadtxt(path, skiprows =5)
+                dt = pd.read_table(path, skiprows=5, header=None)
+                if type(dt.iloc[0][0]) == str:
+                    dt = pd.read_table(path, skiprows=5, header=None, decimal=',')
+                dt = dt.values
             except OSError:
                 print("File not found")
                 return

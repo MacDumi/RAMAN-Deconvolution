@@ -2,6 +2,7 @@ import os
 import queue
 import numpy as np
 import pandas as pd
+from datetime import datetime
 import matplotlib.pyplot as plt
 from multiprocessing import Process, Queue
 from PyQt5.QtCore import *
@@ -147,9 +148,17 @@ class BatchDeconvolute(QThread):
         out = pd.DataFrame(index = index)
 
         folder  = os.path.dirname(self.files[0])+'/BatchDeconvolution_'
-        folder += os.path.splitext(os.path.basename(self.files[0]))[0]
+        folder += f'{len(self.files)}_files_{datetime.now()}'
         if not os.path.exists(folder):
-            os.makedirs(folder)
+            try:
+                os.makedirs(folder)
+            except OSError:
+                err  = 'OS error|'
+                err += 'Could not write to disk - Read-only file system'
+                self.error.emit(err)
+                self.was_canceled.emit()
+                return
+
         arguments = [self.fit.names, self.fit.shape, self.bsParams[0],
                     self.cropLimits, self.peakLimits, self.parguess,
                     self.bounds, index, folder]
