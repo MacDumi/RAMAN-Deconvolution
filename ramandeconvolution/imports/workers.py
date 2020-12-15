@@ -2,7 +2,6 @@ import os
 import queue
 import numpy as np
 import pandas as pd
-from datetime import datetime
 import matplotlib.pyplot as plt
 from multiprocessing import Process, Queue
 from PyQt5.QtCore import *
@@ -148,7 +147,7 @@ class BatchDeconvolute(QThread):
         out = pd.DataFrame(index = index)
 
         folder  = os.path.dirname(self.files[0])+'/BatchDeconvolution_'
-        folder += f'{len(self.files)}_files_{datetime.now()}'
+        folder += f'{len(self.files)}_files'
         if not os.path.exists(folder):
             try:
                 os.makedirs(folder)
