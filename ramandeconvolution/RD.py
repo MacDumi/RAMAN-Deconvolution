@@ -246,8 +246,9 @@ class RD(QMainWindow, main_gui):
                 return -1, -1, -1
         rows = self.tableWidget.rowCount()
         cols = self.tableWidget.columnCount()
-        params = pd.DataFrame(columns=
-                ['lb', 'pos', 'pos_min', 'pos_max',  'int', 'width', 'shape'])
+        params = pd.DataFrame(columns=['lb', 'pos', 'pos_min', 'pos_max',
+                       'int', 'int_min', 'int_max', 'width', 'width_min',
+                                                        'width_max', 'shape'])
         for row in range(rows):
             if self.tableWidget.item(row, 0).checkState() & Qt.Checked:
                 error = [self.itemCheck(self.tableWidget.item(row, col),
@@ -261,16 +262,20 @@ class RD(QMainWindow, main_gui):
                 p_shape = self.tableWidget.cellWidget(row,
                                               cols-1).currentText().strip()[0]
                 params = params.append({'lb':d[0], 'pos':d[1], 'pos_min':d[2],
-                                     'pos_max':d[3], 'int':d[4], 'width':d[5],
+                   'pos_max':d[3], 'int':d[4], 'int_min':d[5], 'int_max':d[6],
+                             'width':d[7], 'width_min':d[8], 'width_max':d[9],
                                          'shape':p_shape}, ignore_index =True)
         self.fit = FIT(params['shape'], params['lb'])
         parguess = np.concatenate([[params['int'][i], params['width'][i],
                                                              params['pos'][i]]
                     for i in range(len(params['lb'])) ]).astype(float)
-        lower = np.concatenate([[5, 5, params['pos_min'][i]] for i in
+        lower = np.concatenate([[params['int_min'][i],
+                                 params['width_min'][i],
+                                 params['pos_min'][i]] for i in
                                      range(len(params['lb'])) ]).astype(float)
-        upper = np.concatenate([[float('inf'), float('inf'),
-                                                params['pos_max'][i]] for i in
+        upper = np.concatenate([[params['int_max'][i],
+                                 params['width_max'][i],
+                                 params['pos_max'][i]] for i in
                                       range(len(params['lb']))]).astype(float)
         return parguess, lower, upper
 
@@ -380,7 +385,8 @@ class RD(QMainWindow, main_gui):
                             lambda: progress.setLabelText("Deconvoluting"))
         self.batch.finished.connect(
                                          lambda x: [progress.setValue(100),
-                       self.errorBox('Some files were not deconvoluted...')
+                     self.errorBox('Some files were not deconvoluted...\n'+
+                           '\n'.join(x.split('<|>')))
                                         if x!='OK' else print('all done')])
         self.batch.error.connect(
                  lambda x: self.errorBox(x.split('|')[1], x.split('|')[0]))
@@ -566,8 +572,9 @@ class RD(QMainWindow, main_gui):
         try:
             parameters = pd.read_csv(fname)
             self.tableWidget.setRowCount(0)
-            cols = ['labels', 'freq', 'freq_min',
-                                                 'freq_max' ,'intens', 'width']
+            cols = ['labels', 'freq', 'freq_min', 'freq_max' ,'intens',
+                    'intens_min', 'intens_max', 'width', 'width_min',
+                                                                'width_max']
             shape = ['Lorentzian', 'Gaussian', 'Voigt', 'BWF']
             for i, l in enumerate(parameters['labels']):
                 self.tableWidget.insertRow(i)
@@ -575,8 +582,8 @@ class RD(QMainWindow, main_gui):
                 self.tableWidget.item(i, 0).setFlags(
                                      Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
                 self.tableWidget.item(i, 0).setCheckState(Qt.Checked)
-                for j, col in enumerate(cols):
-                    self.tableWidget.setItem(i, j+1,
+                for j, col in enumerate(cols[::-1]):
+                    self.tableWidget.setItem(i, len(cols)-j,
                                      QTableWidgetItem(str(parameters[col][i])))
 
                 combo = QComboBox()
@@ -584,7 +591,7 @@ class RD(QMainWindow, main_gui):
                 if parameters['shape'][i] in [s[0] for s in shape]:
                     combo.setCurrentIndex([s[0] for
                                      s in shape].index(parameters['shape'][i]))
-                self.tableWidget.setCellWidget(i, j+2, combo)
+                self.tableWidget.setCellWidget(i, len(cols)+1, combo)
 
             self.statusbar.showMessage("Initial parameters were loaded", 2000)
         except FileNotFoundError:
@@ -596,6 +603,7 @@ class RD(QMainWindow, main_gui):
 
         error = []
         cols = self.tableWidget.columnCount()
+        silent = True
         for row in range(self.tableWidget.rowCount()):
             error = np.append(error, [self.itemCheck(
                                   self.tableWidget.item(row, col), silent=True)
@@ -806,32 +814,60 @@ class RD(QMainWindow, main_gui):
                                     Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
         self.tableWidget.item(rows, 0).setCheckState(Qt.Checked)
         [self.tableWidget.setItem(rows, j, QTableWidgetItem(str('--')))
-                                                         for j in range(1, 7)]
+                                                         for j in range(1, 11)]
 
         combo = QComboBox()
         [combo.addItem('  ' + s) for s
                                  in ['Lorentzian', 'Gaussian', 'Voigt', 'BWF']]
-        self.tableWidget.setCellWidget(rows, 7, combo)
+        self.tableWidget.setCellWidget(rows, 11, combo)
 
-    def itemCheck(self, item, **kwargs):
+    def itemCheck(self, item, silent=False, **kwargs):
         col = item.column()
         value = item.text()
         error = False
         bg = self.tableWidget.item(0,0).background()
-        if col in range(2, 7):
+        if col in range(2, 11):
             try:
-                float(value)
+                value = float(value)
             except ValueError:
                 error = True
-                bg = QBrush(Qt.red)
-                if 'silent' not in kwargs:
+                if not silent:
                     self.statusbar.showMessage('Not a valid number', 2000)
-        elif col == 7:
+        elif col == 11:
             if value not in ['Gaussian', 'Lorentzian', 'Voigt', 'BWF']:
                 error = True
-                bg = QBrush(Qt.red)
-                if 'silent' not in kwargs:
+                if not silent:
                     self.statusbar.showMessage('Unknown shape', 2000)
+
+        idx = {'between' : {2: (3,4), 5:(6, 7), 8:(9, 10)},
+               'lower'   : {3: 2, 6: 5, 9: 8},
+               'higher'  : {4: 2, 7: 5, 10:8}}
+
+        # Check if the value is between min and max
+        if col in idx['between'].keys():
+            min_val = float(self.tableWidget.item(item.row(),
+                                              idx['between'][col][0]).text())
+            max_val = float(self.tableWidget.item(item.row(),
+                                              idx['between'][col][1]).text())
+            if value < min_val or value > max_val:
+                error = True
+
+        # Check if the min is smaller than the value
+        try:
+            if col in idx['lower'].keys():
+                if value > float(self.tableWidget.item(item.row(),
+                                                      idx['lower'][col]).text()):
+                    error = True
+            # Check if the max is larger than the value
+            if col in idx['higher'].keys():
+                if value < float(self.tableWidget.item(item.row(),
+                                                     idx['higher'][col]).text()):
+                    error = True
+        except AttributeError:
+            # Should only happen when the table is being populated
+            pass
+        if error:
+            bg = QBrush(Qt.red)
         item.setBackground(bg)
         item.setSelected(False)
         return error
@@ -912,7 +948,7 @@ class RD(QMainWindow, main_gui):
     def about(self):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
-        msg.setText("Version v1.01α \nMade by MacDumi \nLille, 2020")
+        msg.setText("Version v1.02α \nMade by MacDumi \nLille, 2021")
         msg.setWindowTitle("About")
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()

@@ -239,7 +239,10 @@ class FIT(QObject):
         Norm = np.max(data.current)/100
         Y = data.current/Norm
         parguess[::3] /= Norm
+        bounds[0][::3] /= Norm
+        bounds[1][::3] /= Norm
 
+        # Calculate the correction factor (due to normalization)
         corr = np.asarray([Norm if n%3 == 0 else 1 for n in
                                                 np.arange(len(parguess))])
 

@@ -61,6 +61,7 @@ def BatchWorker(file_queue, results_queue, error_queue, names, shape, bsParams,
                 print(f'Could not deconvolute the {fname} file')
                 result.iloc[1:len(index)] = -1*np.ones(len(index)-1)
                 print(e)
+                results_queue.put('+|+'.join([result.name,'error']))
         except queue.Empty:
             break
 
@@ -182,10 +183,15 @@ class BatchDeconvolute(QThread):
 
         # Update the slider
         prog = 0
+        bad_files = []
         while prog < len(self.files) and not self.cancel_job:
             if not self.results.empty():
                 res = self.results.get().split('+|+')
-                out[res[0]] = res[1:]
+                if res[1] == 'error':
+                    out[res[0]] = np.zeros(len(out))
+                    bad_files += [res[0]]
+                else:
+                    out[res[0]] = res[1:]
                 prog += 1
                 self.progress.emit(int(100*prog/len(self.files)))
 
@@ -197,8 +203,8 @@ class BatchDeconvolute(QThread):
             # Process the results from the queue
             out.to_csv(folder+'/BatchDeconvolutionResults.csv')
             self.saved.emit(folder+'/BatchDeconvolutionResults.csv')
-            if list(out.iloc[2]).count(-1) >0:
-                pb = list(out.columns[out.iloc[0] == -1])
+            if len(bad_files) or list(out.iloc[2]).count(-1) > 0:
+                pb = bad_files + list(out.columns[out.iloc[0] == -1])
                 self.finished.emit('<|>'.join(pb))
             else:
                 self.finished.emit('OK')
