@@ -429,7 +429,7 @@ class RD(QMainWindow, main_gui):
 
     def plotAdjust(self):
         self.subplot.set_xlabel(r'$\mathbf{Raman\ shift,\ cm^{-1}}$')
-        self.subplot.set_ylabel(r'$\mathbf{Intensty}$')
+        self.subplot.set_ylabel(r'$\mathbf{Intensity}$')
         self.subplot.legend()
         self.canvas.draw()
 
