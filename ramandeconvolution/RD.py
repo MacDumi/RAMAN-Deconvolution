@@ -648,7 +648,7 @@ class RD(QMainWindow, main_gui):
         self.config = configparser.ConfigParser()
         if len(self.config.read(self.path+'/config/config.ini')):
                self.degree = int(self.config['DEFAULT']['degree'])
-               self.threshold = float(self.config['DEFAULT']['threshold'])
+               self.threshold = int(self.config['DEFAULT']['threshold'])
                self.peakLimits = Limits(int(self.config['PEAK']['low']),
                                               int(self.config['PEAK']['high']))
         # Load fitting parameters
